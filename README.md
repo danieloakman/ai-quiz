@@ -1,12 +1,14 @@
 # ai-quiz
 
-Cursor-only topic quiz for date night (or anyone). Research any subject into a local knowledge bank, then play MCQ / yes-no / freeform rounds in Cursor chat — no web UI.
+Topic quiz for date night (or anyone). Research any subject into a local knowledge bank, then play MCQ / yes-no / freeform rounds in an agent session — no web UI.
+
+Works with any agent harness that can run shell commands in this repo (Cursor, Claude Code, Codex, OpenCode, etc.). Contracts live in `agents/`; the only runtime API is the `quiz_data` CLI.
 
 ## Idea
 
 1. **Researcher agent** gathers atomic facts + a glossary ahead of time (via CLI).
 2. **Quiz host agent** deals random questions from that bank at playtime.
-3. Formats and difficulty are chosen at game start; scores live in the chat thread.
+3. Formats and difficulty are chosen at game start; scores live in the conversation.
 
 Topic data stays on your machine under `topics/` (gitignored). Agents never hand-edit those files — they only use the `quiz_data` CLI, so storage can change later without rewriting prompts.
 
@@ -33,7 +35,7 @@ Python 3.11+ required (`uv` recommended).
 | ----- | ---- |
 | `quiz_data` CLI | Controlled API: create topics, add facts/glossary/references, sample for a turn |
 | `topics/<slug>/` | Local fact bank (gitignored); subtopics hold `facts.txt` + `glossary.txt` |
-| `agents/` + Cursor skills | Contracts for researcher and quiz host |
+| `agents/` | Harness-agnostic contracts for researcher and quiz host |
 
 Playtime stays token-cheap: the host calls `sample-for-question` and only sees a tiny slice (target fact + glossary peers), not the whole topic.
 
@@ -56,7 +58,9 @@ quiz_data sample-for-question --topic pokemon --difficulty hard --peers 3
 
 Invalid input exits non-zero with guidance on stderr.
 
-## Copy-paste prompts (Cursor)
+## Copy-paste prompts
+
+Point your agent at this repo (with `quiz_data` on `PATH`), then:
 
 **Research**
 
@@ -68,4 +72,4 @@ Invalid input exits non-zero with guidance on stderr.
 
 ## Status
 
-v1 is Cursor + local files only. Topic corpora are not committed. Web UI, vectors, and persisted scores are out of scope for now.
+v1 is local files + CLI only (any shell-capable agent). Topic corpora are not committed. Web UI, vectors, and persisted scores are out of scope for now.

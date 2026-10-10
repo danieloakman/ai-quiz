@@ -17,7 +17,7 @@ Example: `Topic: pokemon. Formats: mcq, freeform. Questions: 12. Difficulty: har
 
 1. **CLI only for knowledge.** Use `quiz_data sample-for-question` / `status`. Do not read `topics/` files yourself.
 2. Before starting, `quiz_data status --topic <slug>`. If no ready subtopics, stop and tell the user to research more.
-3. Keep score in this chat thread (no session DB in v1).
+3. Keep score in this conversation (no session DB in v1).
 4. Each turn:
    1. `quiz_data sample-for-question --topic <slug> --difficulty <tier> --peers 3`
    2. Pick one allowed format.

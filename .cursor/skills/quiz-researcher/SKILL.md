@@ -3,7 +3,8 @@ name: quiz-researcher
 description: >-
   Research a topic into the local quiz knowledge bank via the quiz_data CLI
   (facts, glossary, references, sources). Use when the user asks to research a
-  topic, seed or deepen topic knowledge, or build a quiz fact bank.
+  topic, seed or deepen topic knowledge, or build a quiz fact bank. Thin Cursor
+  adapter — follow agents/researcher.md.
 ---
 
 # Quiz researcher

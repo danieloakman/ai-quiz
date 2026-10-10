@@ -1,12 +1,13 @@
 # AGENTS
 
-Couples topic quiz — Cursor-only v1. No web UI or HTTP API.
+Topic quiz — agent-harness agnostic. No web UI or HTTP API. Any tool that can run shell in this repo can research and host.
 
 ## Architecture
 
 - Knowledge lives under `topics/<slug>/` (gitignored). Treat storage as private.
 - **Only mutate or sample via `quiz_data`.** Do not edit files under `topics/` directly.
 - Researcher fills facts + glossary (+ references/sources). Quiz host samples tiny slices each turn.
+- Source of truth for roles: [`agents/`](agents/). Optional Cursor skill wrappers under `.cursor/skills/` only point at those contracts.
 
 ## Setup
 
@@ -17,10 +18,10 @@ direnv allow   # flake.nix + .envrc: creates .venv, installs quiz_data
 
 ## Roles
 
-| Role | Contract | Skill |
-| ---- | -------- | ----- |
-| Research topic into the bank | [agents/researcher.md](agents/researcher.md) | `.cursor/skills/quiz-researcher` |
-| Host a quiz round | [agents/quiz-host.md](agents/quiz-host.md) | `.cursor/skills/quiz-host` |
+| Role | Contract |
+| ---- | -------- |
+| Research topic into the bank | [agents/researcher.md](agents/researcher.md) |
+| Host a quiz round | [agents/quiz-host.md](agents/quiz-host.md) |
 
 ## CLI cheatsheet
 
