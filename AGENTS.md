@@ -1,6 +1,6 @@
 # AGENTS
 
-Topic quiz — agent-harness agnostic. No web UI or HTTP API. Any tool that can run shell in this repo can research and host.
+Topic quiz — agent-harness agnostic. Any tool that can run shell in this repo can research and host. Optional local web UI (`quiz-web`) browses topics and plays deterministic MCQ / yes-no; research and freeform hosting stay on agents/CLI.
 
 ## Architecture
 
@@ -8,6 +8,7 @@ Topic quiz — agent-harness agnostic. No web UI or HTTP API. Any tool that can 
 - **Only mutate or sample via `quiz_data`.** Do not edit files under `topics/` directly.
 - Researcher fills facts + glossary (+ references/sources). Quiz host samples tiny slices each turn.
 - Source of truth for roles: [`agents/`](agents/). Optional Cursor skill wrappers under `.cursor/skills/` only point at those contracts.
+- Web play imports the same `quiz_data` library (no hand-edits of `topics/`).
 
 ## Setup
 

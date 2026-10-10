@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -255,18 +256,38 @@ def subtopic_status(topic: str, subtopic: str) -> SubtopicStatus:
     )
 
 
+def load_topic_meta(topic: str) -> dict[str, str]:
+    """Return meta.toml fields (slug, title, notes). Missing title falls back to slug."""
+    path = require_topic(topic) / "meta.toml"
+    data: dict[str, str] = {"slug": topic, "title": topic, "notes": ""}
+    if not path.is_file():
+        return data
+    with path.open("rb") as f:
+        raw = tomllib.load(f)
+    for key in ("slug", "title", "notes"):
+        val = raw.get(key)
+        if isinstance(val, str) and val.strip():
+            data[key] = val.strip()
+    return data
+
+
 def topic_status(topic: str) -> dict:
     require_topic(topic)
+    meta = load_topic_meta(topic)
     subs = [subtopic_status(topic, s) for s in list_subtopic_slugs(topic)]
     refs = read_content_lines(topic_dir(topic) / "references.txt")
     topic_gloss = read_content_lines(topic_dir(topic) / "glossary.txt")
     return {
         "topic": topic,
+        "title": meta["title"],
+        "notes": meta.get("notes", ""),
         "references": len(refs),
         "topic_glossary": len(topic_gloss),
         "subtopics": subs,
         "ready_subtopics": sum(1 for s in subs if s.ready),
+        "total_subtopics": len(subs),
         "total_facts": sum(s.fact_count for s in subs),
+        "total_glossary": sum(s.glossary_count for s in subs) + len(topic_gloss),
     }
 
 

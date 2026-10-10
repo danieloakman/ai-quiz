@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Play · {{ session.title }} · ai-quiz{% endblock %}
+{% block header_extra %}
+<span class="score-pill">{{ session.score }} / {{ session.answered }} · {{ session.title }}</span>
+{% endblock %}
+{% block content %}
+<section class="section play-top">
+  <p class="crumb"><a href="/topics/{{ session.topic }}">{{ session.title }}</a></p>
+  <p class="progress">Question {{ session.answered + (0 if session.finished else 1) }} of {{ session.questions_total }}</p>
+</section>
+
+{% if session.last_result %}
+<section class="section result {% if session.last_result.correct %}ok{% else %}bad{% endif %}" aria-live="polite">
+  <h2>{% if session.last_result.correct %}Correct{% else %}Not quite{% endif %}</h2>
+  <p class="explain">{{ session.last_result.explanation }}</p>
+  {% if not session.last_result.correct %}
+  <p class="muted">You answered {{ session.last_result.chosen }}; expected {{ session.last_result.expected }}.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if session.finished %}
+<section class="section finale">
+  <h1>Round over</h1>
+  <p class="lede">Score: {{ session.score }} / {{ session.questions_total }}</p>
+  <p><a class="btn primary" href="/topics/{{ session.topic }}">Play again</a>
+     <a class="btn ghost" href="/">All topics</a></p>
+</section>
+{% elif session.question %}
+<section class="section question">
+  <p class="format-tag">{% if session.question.format == 'mcq' %}Multiple Choice Question{% elif session.question.format == 'yes-no' %}Yes / No{% else %}{{ session.question.format }}{% endif %} · {{ session.question.subtopic }}</p>
+  <h1 class="prompt">{{ session.question.prompt }}</h1>
+  <form method="post" action="/play/{{ session.id }}/answer" class="options">
+    {% for opt in session.question.options %}
+    <button class="option" type="submit" name="answer" value="{{ opt }}">{{ opt }}</button>
+    {% endfor %}
+  </form>
+</section>
+
+<section class="section settings">
+  <details class="accordion">
+    <summary>Settings</summary>
+    <div class="accordion-panel">
+      <form method="post" action="/play/{{ session.id }}/difficulty" class="diff-form settings-body">
+        <label>
+          Difficulty
+          <select name="difficulty" onchange="this.form.submit()">
+            {% for d in difficulties %}
+            <option value="{{ d }}" {% if d == session.difficulty %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <span class="hint">Applies to the next question</span>
+      </form>
+    </div>
+  </details>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Topics · ai-quiz{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1 class="brand-hero">ai-quiz</h1>
+  <p class="lede">Local topic banks. Pick a subject, check readiness, play a deterministic round.</p>
+</section>
+
+<section class="section" aria-labelledby="topics-heading">
+  <h2 id="topics-heading">Topics</h2>
+  {% if not topics %}
+  <p class="empty">No topics yet. Research one with <code>quiz_data</code>, then refresh.</p>
+  {% else %}
+  <ul class="topic-list">
+    {% for t in topics %}
+    <li>
+      <a class="topic-row" href="/topics/{{ t.topic }}">
+        <span class="topic-title">{{ t.title }}</span>
+        <span class="topic-meta">
+          <span>{{ t.total_facts }} facts</span>
+          <span>{{ t.ready_subtopics }}/{{ t.total_subtopics }} ready</span>
+          <span>{{ t.total_glossary }} glossary</span>
+        </span>
+        {% if t.ready_subtopics < 1 %}
+        <span class="badge warn">not ready</span>
+        {% else %}
+        <span class="badge ok">ready</span>
+        {% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
+{% endblock %}

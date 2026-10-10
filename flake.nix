@@ -38,12 +38,12 @@
               need_install=1
             elif [ pyproject.toml -nt "$stamp" ]; then
               need_install=1
-            elif find src/quiz_data -type f -newer "$stamp" 2>/dev/null | grep -q .; then
+            elif find src/quiz_data src/quiz_web -type f -newer "$stamp" 2>/dev/null | grep -q .; then
               need_install=1
             fi
 
             if [ "$need_install" = 1 ]; then
-              uv pip install --python .venv/bin/python -e .
+              uv pip install --python .venv/bin/python -e ".[web,dev]"
               touch "$stamp"
             fi
 

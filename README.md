@@ -1,8 +1,8 @@
 # ai-quiz
 
-Topic quiz for date night (or anyone). Research any subject into a local knowledge bank, then play MCQ / yes-no / freeform rounds in an agent session. No web UI.
+Topic quiz for date night (or anyone). Research any subject into a local knowledge bank, then play via an agent session or the local web UI.
 
-Works with any agent harness that can run shell commands in this repo (Cursor, Claude Code, Codex, OpenCode, etc.). Contracts live in `agents/`; the only runtime API is the `quiz_data` CLI.
+Works with any agent harness that can run shell commands in this repo (Cursor, Claude Code, Codex, OpenCode, etc.). Contracts live in `agents/`. Knowledge I/O is the `quiz_data` CLI/library; optional browser play is `quiz-web`.
 
 ## Idea
 
@@ -24,10 +24,19 @@ Manual:
 
 ```bash
 uv venv && source .venv/bin/activate
-uv pip install -e .
+uv pip install -e ".[web,dev]"   # omit extras for CLI-only
 ```
 
 Python 3.11+ required (`uv` recommended).
+
+## Web UI
+
+Browse topic stats and play deterministic MCQ / yes-no rounds (no LLM). Difficulty can change mid-run for the next question. Research still uses the CLI/agent.
+
+```bash
+quiz-web          # http://127.0.0.1:8765
+# or: uvicorn quiz_web.app:app --reload --port 8765
+```
 
 ## How it works
 
@@ -36,6 +45,7 @@ Python 3.11+ required (`uv` recommended).
 | `quiz_data` CLI | Controlled API: create topics, add facts/glossary/references, sample for a turn |
 | `topics/<slug>/` | Local fact bank (gitignored); subtopics hold `facts.txt` + `glossary.txt` |
 | `agents/` | Harness-agnostic contracts for researcher and quiz host |
+| `quiz-web` | Local browse + deterministic play UI |
 
 Playtime stays token-cheap: the host calls `sample-for-question` and only sees a tiny slice (target fact + glossary peers), not the whole topic.
 
@@ -72,4 +82,4 @@ Point your agent at this repo (with `quiz_data` on `PATH`), then:
 
 ## Status
 
-v1 is local files + CLI only (any shell-capable agent). Topic corpora are not committed. Web UI, vectors, and persisted scores are out of scope for now.
+Local files + CLI (any shell-capable agent) plus optional deterministic web play. Topic corpora are not committed. Freeform-in-browser, vectors, and persisted scores are still out of scope.

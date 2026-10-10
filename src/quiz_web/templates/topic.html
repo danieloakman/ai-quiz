@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ topic.title }} · ai-quiz{% endblock %}
+{% block content %}
+<section class="section topic-head">
+  <p class="crumb"><a href="/">Topics</a></p>
+  <h1>{{ topic.title }}</h1>
+  {% if topic.notes %}
+  <p class="lede">{{ topic.notes }}</p>
+  {% endif %}
+  <dl class="stat-grid">
+    <div><dt>Facts</dt><dd>{{ topic.total_facts }}</dd></div>
+    <div><dt>Ready subtopics</dt><dd>{{ topic.ready_subtopics }}/{{ topic.total_subtopics }}</dd></div>
+    <div><dt>Glossary</dt><dd>{{ topic.total_glossary }}</dd></div>
+    <div><dt>References</dt><dd>{{ topic.references }}</dd></div>
+  </dl>
+</section>
+
+<section class="section">
+  {% if not topic.subtopics %}
+  <h2>Subtopics</h2>
+  <p class="empty">No subtopics yet.</p>
+  {% else %}
+  <details class="accordion">
+    <summary id="subs-heading">
+      Subtopics
+      <span class="accordion-meta">{{ topic.ready_subtopics }}/{{ topic.total_subtopics }} ready</span>
+    </summary>
+    <div class="accordion-panel">
+      <ul class="sub-list">
+        {% for s in topic.subtopics %}
+        <li>
+          <span class="sub-slug">{{ s.slug }}</span>
+          <span class="topic-meta">
+            <span>{{ s.fact_count }} facts</span>
+            <span>{{ s.glossary_count }} glossary</span>
+            <span>{{ s.label }}</span>
+            {% if s.hard_mcq_ok %}<span>hard MCQ ok</span>{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </details>
+  {% endif %}
+</section>
+
+<section class="section" aria-labelledby="play-heading">
+  <h2 id="play-heading">Play</h2>
+  {% if topic.ready_subtopics < 1 %}
+  <p class="empty">Needs at least one ready subtopic (≥8 facts) before you can play.</p>
+  {% else %}
+  <form class="play-form" method="post" action="/play">
+    <input type="hidden" name="topic" value="{{ topic.topic }}" />
+    <label>
+      Questions
+      <input type="number" name="questions" min="1" max="50" value="5" />
+    </label>
+    <label>
+      Difficulty
+      <select name="difficulty">
+        {% for d in difficulties %}
+        <option value="{{ d }}" {% if d == 'moderate' %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <fieldset>
+      <legend>Formats</legend>
+      <label class="check">
+        <input type="checkbox" name="formats" value="mcq" checked />
+        Multiple Choice Question
+      </label>
+      <label class="check">
+        <input type="checkbox" name="formats" value="yes-no" checked />
+        Yes / No
+      </label>
+    </fieldset>
+    <button type="submit" class="btn primary">Start round</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}
