@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quiz-data"
+version = "0.1.0"
+description = "CLI API for couples-quiz topic knowledge (facts, glossary, references)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+quiz_data = "quiz_data.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

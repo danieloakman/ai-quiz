@@ -1,0 +1,2 @@
+# Subtopic glossary: Term: short gloss
+# Use: quiz_data add-glossary --topic <slug> --subtopic <slug> --term "..." --gloss "..."

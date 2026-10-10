@@ -1,0 +1,2 @@
+# Topic-wide glossary: Term: short gloss
+# Use: quiz_data add-glossary --topic <slug> --term "..." --gloss "..."

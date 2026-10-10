@@ -1,0 +1,2 @@
+# One reference per line (URL or short citation).
+# Use: quiz_data add-reference --topic <slug> --ref "..."

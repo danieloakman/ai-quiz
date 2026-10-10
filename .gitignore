@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+
+# Topic knowledge is local-only; template is tracked explicitly.
+topics/*
+!topics/.gitkeep
+!topics/_TEMPLATE/
+!topics/_TEMPLATE/**

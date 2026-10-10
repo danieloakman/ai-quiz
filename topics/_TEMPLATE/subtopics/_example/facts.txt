@@ -1,0 +1,2 @@
+# One atomic claim per line. Example subtopic — replace via ensure-subtopic.
+# Use: quiz_data add-fact --topic <slug> --subtopic <slug> --claim "..."
