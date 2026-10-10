@@ -1,6 +1,6 @@
 # ai-quiz
 
-Topic quiz for date night (or anyone). Research any subject into a local knowledge bank, then play MCQ / yes-no / freeform rounds in an agent session — no web UI.
+Topic quiz for date night (or anyone). Research any subject into a local knowledge bank, then play MCQ / yes-no / freeform rounds in an agent session. No web UI.
 
 Works with any agent harness that can run shell commands in this repo (Cursor, Claude Code, Codex, OpenCode, etc.). Contracts live in `agents/`; the only runtime API is the `quiz_data` CLI.
 
@@ -10,7 +10,7 @@ Works with any agent harness that can run shell commands in this repo (Cursor, C
 2. **Quiz host agent** deals random questions from that bank at playtime.
 3. Formats and difficulty are chosen at game start; scores live in the conversation.
 
-Topic data stays on your machine under `topics/` (gitignored). Agents never hand-edit those files — they only use the `quiz_data` CLI, so storage can change later without rewriting prompts.
+Topic data stays on your machine under `topics/` (gitignored). Agents never hand-edit those files; they only use the `quiz_data` CLI, so storage can change later without rewriting prompts.
 
 ## Setup
 
