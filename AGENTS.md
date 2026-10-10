@@ -11,8 +11,8 @@ Couples topic quiz — Cursor-only v1. No web UI or HTTP API.
 ## Setup
 
 ```bash
-uv venv && source .venv/bin/activate
-uv pip install -e .
+direnv allow   # flake.nix + .envrc: creates .venv, installs quiz_data
+# or: nix develop
 ```
 
 ## Roles

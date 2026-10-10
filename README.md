@@ -12,6 +12,14 @@ Topic data stays on your machine under `topics/` (gitignored). Agents never hand
 
 ## Setup
 
+With [direnv](https://direnv.net/) + Nix flakes (recommended):
+
+```bash
+direnv allow   # reads .envrc → use flake; creates .venv and installs quiz_data
+```
+
+Manual:
+
 ```bash
 uv venv && source .venv/bin/activate
 uv pip install -e .
