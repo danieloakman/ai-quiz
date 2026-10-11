@@ -384,7 +384,7 @@ form.is-busy .option:not(.is-loading) {
   display: inline-flex;
   align-items: baseline;
   gap: 0.4rem;
-  margin: 0.75rem 0 0;
+  margin: 0.75rem 0 1.25rem;
   padding: 0.35rem 0.65rem;
   border: 1px solid var(--line);
   border-radius: 6px;
