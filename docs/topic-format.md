@@ -27,4 +27,4 @@ topics/<slug>/
 ## Readiness
 
 - Subtopic **ready** at ≥8 facts; otherwise `under-researched` (sampler skips it).
-- **Hard MCQ** also wants ≥4 glossary terms in that subtopic.
+- Richer host context also wants ≥4 glossary terms in that subtopic (`hard_mcq_ok`).

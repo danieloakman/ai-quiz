@@ -62,14 +62,12 @@ def test_openai_compat_client_mock_transport():
 
 def test_llm_host_deal_mcq_and_exact_grade(ready_topic: str):
     sample = _sample(ready_topic)
-    if len(sample.peer_glossary) < 1:
-        pytest.skip("need peer glossary")
     correct = "Anchor term"
-    peer = sample.peer_glossary[0][0]
+    options = [correct, "Peer A", "Peer B", "Peer C"]
     payload = {
         "format": "mcq",
         "prompt": f"Which term fits?\n\n{sample.target_fact}",
-        "options": [correct, peer],
+        "options": options,
         "correct": correct,
         "explanation": sample.target_fact,
     }
@@ -78,22 +76,36 @@ def test_llm_host_deal_mcq_and_exact_grade(ready_topic: str):
     q = host.deal(sample, ["mcq"])
     assert q.format == "mcq"
     assert correct in q.options
+    assert len(q.options) >= 4
     ok = host.grade(q, correct)
     assert ok.correct is True
-    bad = host.grade(q, peer)
+    bad = host.grade(q, "Peer A")
     assert bad.correct is False
 
 
-def test_reject_invented_distractor(ready_topic: str):
+def test_mcq_allows_authored_distractors(ready_topic: str):
+    sample = _sample(ready_topic)
+    payload = {
+        "format": "mcq",
+        "prompt": "Which?",
+        "options": ["Anchor term", "Invented A", "Invented B", "Invented C"],
+        "correct": "Anchor term",
+        "explanation": sample.target_fact,
+    }
+    q = question_from_payload(payload, sample, ["mcq"])
+    assert q.options == payload["options"]
+
+
+def test_mcq_rejects_too_few_options(ready_topic: str):
     sample = _sample(ready_topic)
     bad = {
         "format": "mcq",
         "prompt": "Which?",
-        "options": ["Anchor term", "Totally Invented Term"],
+        "options": ["Anchor term", "Only one distractor"],
         "correct": "Anchor term",
         "explanation": sample.target_fact,
     }
-    with pytest.raises(QuizHostError, match="peer_glossary"):
+    with pytest.raises(QuizHostError, match="at least four"):
         question_from_payload(bad, sample, ["mcq"])
 
 

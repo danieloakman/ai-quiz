@@ -93,12 +93,12 @@ def sample_for_question(
     if difficulty == "hard" and len(same_gloss) < MIN_GLOSSARY_HARD_MCQ:
         notes.append(
             "hard_mcq_weak: fewer than 4 glossary terms in-bucket; "
-            "prefer freeform/yes-no or easier difficulty."
+            "lean on target_fact when authoring same-kind distractors."
         )
     if not peer_glossary and peers > 0:
         notes.append(
-            "no_glossary_peers: inventing MCQ distractors is discouraged; "
-            "use freeform/yes-no."
+            "no_glossary_peers: little glossary context; "
+            "author same-kind distractors from the target fact and topic."
         )
 
     return QuestionSample(

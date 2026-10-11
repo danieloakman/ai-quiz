@@ -30,10 +30,8 @@ Example: `Topic: pokemon. Formats: mcq, freeform. Questions: 12. Difficulty: har
 
 ## Using the sample
 
-- `target_fact` — basis for the correct answer / grading.
-- `peer_glossary` — **MCQ wrong answers** (other terms). Do not invent distractors when peers are missing or notes say so.
-- `peer_facts` — optional extra context; not required for MCQ options.
-- If `hard_mcq_ok` is false or notes warn `hard_mcq_weak` / `no_glossary_peers`, prefer **freeform** or **yes-no** for that turn (or ask to lower difficulty).
+- `target_fact` — basis for the stem, correct answer, and grading.
+- `peer_glossary` / `peer_facts` — context and inspiration for wording and distractors (not an allowlist).
 
 ## Difficulty (peer provenance)
 
@@ -48,7 +46,10 @@ Example: `Topic: pokemon. Formats: mcq, freeform. Questions: 12. Difficulty: har
 
 ## MCQ construction
 
-- Stem from `target_fact`.
-- Correct option derived from the fact.
-- Wrong options = other `peer_glossary` terms (same category as the answer).
-- Shuffle options. Never rely solely on model world knowledge for obscure topics.
+- Stem from `target_fact`; correct option derived from the fact.
+- Author **at least 4** options (correct + plausible distractors).
+- All options must be the **same kind/category** as each other.
+- Vary option brevity: often one word or a short phrase; full sentences only when needed.
+  Prefer concise labels over restating the fact; keep options similar in length/style.
+- You may invent distractors; peers are inspiration, not a closed set.
+- Shuffle options so the correct answer is not always first.

@@ -75,8 +75,8 @@ just web-cursor   # http://127.0.0.1:8765
 
 Playtime stays token-cheap: each turn samples a tiny slice (target fact + glossary peers), not the whole topic.
 
-**Difficulty:** `easy` · `moderate` · `hard` (how tightly MCQ distractors stay in the same subtopic).  
-**Readiness:** a subtopic needs ≥8 facts to be dealt; hard MCQ also wants ≥4 glossary terms.
+**Difficulty:** `easy` · `moderate` · `hard` (how tightly sampled peer glossary context stays in the same subtopic).  
+**Readiness:** a subtopic needs ≥8 facts to be dealt; richer buckets also aim for ≥4 glossary terms.
 
 More detail: [AGENTS.md](AGENTS.md), [docs/topic-format.md](docs/topic-format.md).
 

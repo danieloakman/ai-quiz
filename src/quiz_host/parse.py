@@ -87,16 +87,14 @@ def question_from_payload(
     elif fmt == "freeform":
         options = []
     elif fmt == "mcq":
-        if len(options) < 2:
-            raise QuizHostError("MCQ needs at least two options.")
+        if len(options) < 4:
+            raise QuizHostError("MCQ needs at least four options.")
+        folded = [o.casefold() for o in options]
+        if len(set(folded)) != len(folded):
+            raise QuizHostError("MCQ options must be unique.")
         if correct not in options:
             raise QuizHostError("MCQ correct answer must appear in options.")
-        peer_terms = {t.casefold() for t, _ in sample.peer_glossary}
-        wrongs = [o for o in options if o != correct]
-        for w in wrongs:
-            if w.casefold() not in peer_terms:
-                raise QuizHostError(f"MCQ distractor {w!r} is not in peer_glossary.")
-        if not wrongs:
+        if all(o == correct for o in options):
             raise QuizHostError("MCQ needs at least one distractor.")
 
     return BuiltQuestion(

@@ -15,7 +15,7 @@ Follow the full contract in [agents/quiz-host.md](../../../agents/quiz-host.md).
 
 - Load knowledge only via `quiz_data sample-for-question` / `status` — do not read `topics/` files.
 - Parse user settings: topic, formats, questions, difficulty (`easy`|`moderate`|`hard`).
-- MCQ distractors from returned `peer_glossary` only; if peers are thin, use freeform/yes-no.
+- MCQ: author ≥4 same-kind options (correct + distractors); prefer short labels when they fit; peers are inspiration, not an allowlist.
 - Keep running score in this conversation; one question per turn.
 
 ## Each turn

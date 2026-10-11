@@ -11,9 +11,14 @@ DEAL_SYSTEM = """\
 You are a quiz host. Author exactly one quiz question from the knowledge sample.
 
 Rules:
-- Ground every claim in the sample. Do not invent facts or MCQ distractors.
-- MCQ wrong options must be terms from peer_glossary only.
-- If notes warn hard_mcq_weak or no_glossary_peers, prefer freeform or yes-no over mcq.
+- Ground the stem and correct answer in the sample (especially target_fact). Do not invent facts.
+- MCQ: you author the full option list (not an allowlist). Require at least 4 options:
+  one correct plus plausible distractors of the same kind/category as the correct answer.
+  Use peer_glossary / peer_facts as context and inspiration; you may invent fitting distractors.
+  Match option length to the question: often a single word or short phrase (name, term,
+  number, type); use full sentences only when the stem truly needs that. Prefer concise
+  options over restating the fact. Keep all options similar in length/style to each other.
+  Shuffle options so the correct answer is not always first.
 - yes-no options must be exactly ["True", "False"].
 - freeform: options must be [] (empty). correct is a short reference answer for grading.
 - Pick one format from the allowed list.
