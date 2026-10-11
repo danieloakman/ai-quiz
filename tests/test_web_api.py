@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from quiz_data.sample import QuestionSample
+from quiz_host.errors import QuizHostError
 from quiz_host.protocols import BuiltQuestion, GradeResult
 from quiz_web import app as app_module
 from quiz_web.app import app
@@ -66,15 +67,42 @@ class FakeHost:
 
 
 class SlowDealHost(FakeHost):
-    """Deal blocks until released; grade is immediate."""
+    """Deals after `instant_deals` block on `deal_gate`; grade is immediate."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, instant_deals: int = 1) -> None:
         super().__init__()
+        self.instant_deals = instant_deals
         self.deal_gate = threading.Event()
 
     def deal(self, sample: QuestionSample, formats: Sequence[str]) -> BuiltQuestion:
-        assert self.deal_gate.wait(timeout=5), "deal gate was not released"
+        next_n = self.deals + 1
+        if next_n > self.instant_deals:
+            assert self.deal_gate.wait(timeout=5), "deal gate was not released"
         return super().deal(sample, formats)
+
+
+class PrefetchFailHost(FakeHost):
+    """First deal succeeds; further deals raise until `fail_prefetch` is cleared."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fail_prefetch = True
+
+    def deal(self, sample: QuestionSample, formats: Sequence[str]) -> BuiltQuestion:
+        next_n = self.deals + 1
+        if next_n > 1 and self.fail_prefetch:
+            self.deals = next_n
+            raise QuizHostError("prefetch failed")
+        return super().deal(sample, formats)
+
+
+def _wait_until(predicate, *, timeout: float = 2.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.05)
+    return False
 
 
 @pytest.fixture
@@ -147,12 +175,71 @@ def test_play_flow_and_mid_run_difficulty(client):
     assert body["question"]["difficulty"] == "hard"
 
 
-def test_answer_returns_before_slow_deal(
+def test_prefetch_fills_two_ahead(client):
+    http, slug = client
+    host = app_module.get_host()
+    assert isinstance(host, FakeHost)
+
+    start = http.post(
+        "/api/play",
+        json={
+            "topic": slug,
+            "questions": 5,
+            "difficulty": "easy",
+            "formats": ["mcq"],
+        },
+    )
+    assert start.status_code == 200
+    body = start.json()
+    sid = body["id"]
+    assert body["question"] is not None
+    assert "prefetch" not in body
+
+    session = app_module.sessions.get(sid)
+    assert session is not None
+    assert _wait_until(lambda: len(session.prefetch) == 2)
+    assert host.deals >= 3
+    # Upcoming prompts must not leak into the public view.
+    view = http.get(f"/api/play/{sid}").json()
+    assert view["question"]["prompt"] == body["question"]["prompt"]
+    assert "prefetch" not in view
+
+
+def test_warm_buffer_serves_next_question_immediately(client):
+    http, slug = client
+    start = http.post(
+        "/api/play",
+        json={
+            "topic": slug,
+            "questions": 5,
+            "difficulty": "easy",
+            "formats": ["mcq"],
+        },
+    )
+    sid = start.json()["id"]
+    q = start.json()["question"]
+    session = app_module.sessions.get(sid)
+    assert session is not None
+    assert _wait_until(lambda: len(session.prefetch) >= 1)
+
+    buffered_prompt = session.prefetch[0].prompt
+    ans = http.post(
+        f"/api/play/{sid}/answer",
+        json={"answer": q["options"][0]},
+    )
+    assert ans.status_code == 200
+    body = ans.json()
+    assert body["last_result"] is not None
+    assert body["dealing"] is False
+    assert body["question"] is not None
+    assert body["question"]["prompt"] == buffered_prompt
+
+
+def test_answer_returns_before_slow_deal_when_buffer_cold(
     ready_topic: str, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.setattr(app_module, "sessions", SessionStore())
-    host = SlowDealHost()
-    host.deal_gate.set()  # allow the initial start-play deal
+    host = PrefetchFailHost()
     app_module.set_host(host)
     http = TestClient(app)
     try:
@@ -160,7 +247,7 @@ def test_answer_returns_before_slow_deal(
             "/api/play",
             json={
                 "topic": ready_topic,
-                "questions": 2,
+                "questions": 3,
                 "difficulty": "easy",
                 "formats": ["mcq"],
             },
@@ -169,8 +256,22 @@ def test_answer_returns_before_slow_deal(
         sid = start.json()["id"]
         q = start.json()["question"]
         assert q is not None
+        # Prefetch fails in the background; the current turn stays healthy.
+        time.sleep(0.2)
+        session = app_module.sessions.get(sid)
+        assert session is not None
+        assert session.prefetch == []
+        cold = http.get(f"/api/play/{sid}").json()
+        assert cold["question"] is not None
+        assert cold["dealing"] is False
+        assert cold["deal_error"] is None
 
-        host.deal_gate.clear()  # block prefetch while answering
+        host.fail_prefetch = False
+        slow = SlowDealHost(instant_deals=0)
+        slow.deal_gate.clear()
+        # Keep deal count continuity irrelevant; swap host for on-demand path.
+        app_module.set_host(slow)
+
         ans = http.post(
             f"/api/play/{sid}/answer",
             json={"answer": q["options"][0]},
@@ -181,17 +282,46 @@ def test_answer_returns_before_slow_deal(
         assert body["question"] is None
         assert body["dealing"] is True
 
-        host.deal_gate.set()
-        deadline = time.monotonic() + 2
-        while time.monotonic() < deadline:
-            body = http.get(f"/api/play/{sid}").json()
-            if body["question"] is not None:
-                break
-            time.sleep(0.05)
+        slow.deal_gate.set()
+        assert _wait_until(
+            lambda: http.get(f"/api/play/{sid}").json()["question"] is not None
+        )
+        body = http.get(f"/api/play/{sid}").json()
         assert body["question"] is not None
         assert body["dealing"] is False
     finally:
         app_module.set_host(None)
+
+
+def test_difficulty_change_discards_stale_prefetch(client):
+    http, slug = client
+    start = http.post(
+        "/api/play",
+        json={
+            "topic": slug,
+            "questions": 4,
+            "difficulty": "easy",
+            "formats": ["mcq"],
+        },
+    )
+    sid = start.json()["id"]
+    session = app_module.sessions.get(sid)
+    assert session is not None
+    assert _wait_until(lambda: len(session.prefetch) == 2)
+    assert all(q.difficulty == "easy" for q in session.prefetch)
+
+    diff = http.post(
+        f"/api/play/{sid}/difficulty",
+        json={"difficulty": "hard"},
+    )
+    assert diff.status_code == 200
+    assert diff.json()["difficulty"] == "hard"
+    assert _wait_until(
+        lambda: (
+            len(session.prefetch) == 2
+            and all(q.difficulty == "hard" for q in session.prefetch)
+        )
+    )
 
 
 def test_start_with_time_limit_and_timeout_advances(client):
