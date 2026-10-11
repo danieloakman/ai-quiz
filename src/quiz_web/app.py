@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Annotated
 
@@ -16,7 +17,7 @@ from quiz_data.store import list_topic_slugs, load_topic_meta, topic_status
 from quiz_host.errors import QuizHostError
 from quiz_host.factory import host_from_env
 from quiz_host.parse import normalize_formats
-from quiz_host.protocols import FORMATS, QuizHost
+from quiz_host.protocols import FORMATS, BuiltQuestion, QuizHost
 from quiz_web.sessions import PlaySession, SessionStore, new_session_id
 
 _PKG = Path(__file__).resolve().parent
@@ -77,24 +78,37 @@ def _public_question(q) -> dict:
 
 
 def _session_view(session: PlaySession) -> dict:
+    with session.lock:
+        dealing = session.dealing
+        deal_error = session.deal_error
+        current = session.current
+        finished = session.finished
+        last_result = session.last_result
+        history = list(session.history)
+        score = session.score
+        answered = session.answered
+        difficulty = session.difficulty
+        formats = list(session.formats)
+        questions_total = session.questions_total
+
     return {
         "id": session.id,
         "topic": session.topic,
         "title": session.title,
-        "formats": session.formats,
-        "questions_total": session.questions_total,
-        "difficulty": session.difficulty,
-        "score": session.score,
-        "answered": session.answered,
-        "remaining": max(0, session.questions_total - session.answered),
-        "finished": session.finished,
+        "formats": formats,
+        "questions_total": questions_total,
+        "difficulty": difficulty,
+        "score": score,
+        "answered": answered,
+        "remaining": max(0, questions_total - answered),
+        "finished": finished,
+        "dealing": dealing,
+        "deal_error": deal_error,
         "question": (
-            _public_question(session.current)
-            if session.current and not session.finished
-            else None
+            _public_question(current) if current and not finished else None
         ),
-        "last_result": session.last_result,
-        "history": session.history,
+        "last_result": last_result,
+        "history": history,
     }
 
 
@@ -107,29 +121,99 @@ def _deal(session: PlaySession) -> None:
     session.current = get_host().deal(sample, session.formats)
 
 
-def _grade_and_advance(session: PlaySession, chosen: str) -> None:
+def _exc_message(error: BaseException) -> str:
+    if isinstance(error, (QuizHostError, QuizDataError)):
+        return error.message
+    return str(error)
+
+
+def _apply_prefetched(
+    session: PlaySession,
+    question: BuiltQuestion | None,
+    error: BaseException | None,
+) -> None:
+    with session.lock:
+        session.dealing = False
+        if error is not None:
+            session.deal_error = _exc_message(error)
+            return
+        session.deal_error = None
+        session.current = question
+
+
+def _grade_and_prefetch(session: PlaySession, chosen: str) -> None:
+    """Grade the current answer; prefetch the next question in parallel."""
     q = session.current
     assert q is not None
-    result_grade = get_host().grade(q, chosen)
-    if result_grade.correct:
-        session.score += 1
-    session.answered += 1
-    result = {
-        "correct": result_grade.correct,
-        "chosen": chosen,
-        "expected": q.correct,
-        "explanation": result_grade.explanation,
-        "prompt": q.prompt,
-        "format": q.format,
-    }
-    session.last_result = result
-    session.history.append(result)
-    session.current = None
+    host = get_host()
+    will_continue = session.answered + 1 < session.questions_total
 
-    if session.answered >= session.questions_total:
-        session.finished = True
-    else:
-        _deal(session)
+    box: dict = {"question": None, "error": None, "done": False}
+    deal_thread: threading.Thread | None = None
+
+    if will_continue:
+        topic = session.topic
+        difficulty = session.difficulty
+        formats = list(session.formats)
+
+        def deal_worker() -> None:
+            try:
+                sample = sample_for_question(topic, difficulty)
+                box["question"] = host.deal(sample, formats)
+            except BaseException as exc:  # noqa: BLE001
+                box["error"] = exc
+            finally:
+                box["done"] = True
+
+        with session.lock:
+            session.dealing = True
+            session.deal_error = None
+        deal_thread = threading.Thread(target=deal_worker, daemon=True)
+        deal_thread.start()
+
+    result_grade = host.grade(q, chosen)
+
+    with session.lock:
+        if result_grade.correct:
+            session.score += 1
+        session.answered += 1
+        result = {
+            "correct": result_grade.correct,
+            "chosen": chosen,
+            "expected": q.correct,
+            "explanation": result_grade.explanation,
+            "prompt": q.prompt,
+            "format": q.format,
+        }
+        session.last_result = result
+        session.history.append(result)
+        session.current = None
+
+        if not will_continue:
+            session.finished = True
+            session.dealing = False
+            return
+
+        session.finished = False
+
+        if box["done"]:
+            err = box["error"]
+            session.dealing = False
+            if err is not None:
+                session.deal_error = _exc_message(err)
+            else:
+                session.current = box["question"]
+                session.deal_error = None
+            return
+
+    # Deal still running: finish applying on that thread.
+    assert deal_thread is not None
+
+    def finish() -> None:
+        deal_thread.join()
+        _apply_prefetched(session, box["question"], box["error"])
+
+    threading.Thread(target=finish, daemon=True).start()
 
 
 def _parse_formats(raw: list[str] | None) -> list[str]:
@@ -241,11 +325,11 @@ def answer_play(session_id: str, answer: str = Form(...)):
     session = sessions.get(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found.")
-    if session.finished or session.current is None:
+    if session.finished or session.dealing or session.current is None:
         raise HTTPException(status_code=400, detail="No active question.")
 
     try:
-        _grade_and_advance(session, answer.strip())
+        _grade_and_prefetch(session, answer.strip())
     except (QuizDataError, QuizHostError) as exc:
         raise _http_host_error(exc) from None
 
@@ -332,12 +416,12 @@ def api_answer(session_id: str, payload: dict):
     session = sessions.get(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found.")
-    if session.finished or session.current is None:
+    if session.finished or session.dealing or session.current is None:
         raise HTTPException(status_code=400, detail="No active question.")
 
     chosen = str(payload.get("answer", "")).strip()
     try:
-        _grade_and_advance(session, chosen)
+        _grade_and_prefetch(session, chosen)
     except (QuizDataError, QuizHostError) as exc:
         raise _http_host_error(exc) from None
 

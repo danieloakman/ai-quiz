@@ -49,7 +49,7 @@
   {% if topic.ready_subtopics < 1 %}
   <p class="empty">Needs at least one ready subtopic (≥8 facts) before you can play.</p>
   {% else %}
-  <form class="play-form" method="post" action="/play">
+  <form class="play-form" method="post" action="/play" data-busy-message="Dealing first question…">
     <input type="hidden" name="topic" value="{{ topic.topic }}" />
     <label>
       Questions

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Sequence
 
 import pytest
@@ -63,6 +65,18 @@ class FakeHost:
         )
 
 
+class SlowDealHost(FakeHost):
+    """Deal blocks until released; grade is immediate."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.deal_gate = threading.Event()
+
+    def deal(self, sample: QuestionSample, formats: Sequence[str]) -> BuiltQuestion:
+        assert self.deal_gate.wait(timeout=5), "deal gate was not released"
+        return super().deal(sample, formats)
+
+
 @pytest.fixture
 def client(ready_topic: str, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(app_module, "sessions", SessionStore())
@@ -119,5 +133,61 @@ def test_play_flow_and_mid_run_difficulty(client):
     body = ans.json()
     assert body["answered"] == 1
     assert body["difficulty"] == "hard"
-    if not body["finished"]:
-        assert body["question"]["difficulty"] == "hard"
+    assert body["last_result"] is not None
+
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        body = http.get(f"/api/play/{sid}").json()
+        if body["question"] is not None:
+            break
+        time.sleep(0.05)
+    assert body["question"] is not None
+    assert body["dealing"] is False
+    assert body["question"]["difficulty"] == "hard"
+
+
+def test_answer_returns_before_slow_deal(
+    ready_topic: str, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(app_module, "sessions", SessionStore())
+    host = SlowDealHost()
+    host.deal_gate.set()  # allow the initial start-play deal
+    app_module.set_host(host)
+    http = TestClient(app)
+    try:
+        start = http.post(
+            "/api/play",
+            json={
+                "topic": ready_topic,
+                "questions": 2,
+                "difficulty": "easy",
+                "formats": ["mcq"],
+            },
+        )
+        assert start.status_code == 200
+        sid = start.json()["id"]
+        q = start.json()["question"]
+        assert q is not None
+
+        host.deal_gate.clear()  # block prefetch while answering
+        ans = http.post(
+            f"/api/play/{sid}/answer",
+            json={"answer": q["options"][0]},
+        )
+        assert ans.status_code == 200
+        body = ans.json()
+        assert body["last_result"] is not None
+        assert body["question"] is None
+        assert body["dealing"] is True
+
+        host.deal_gate.set()
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            body = http.get(f"/api/play/{sid}").json()
+            if body["question"] is not None:
+                break
+            time.sleep(0.05)
+        assert body["question"] is not None
+        assert body["dealing"] is False
+    finally:
+        app_module.set_host(None)

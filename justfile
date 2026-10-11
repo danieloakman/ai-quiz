@@ -52,3 +52,23 @@ web-cursor:
     export CURSOR_API_KEY
     CURSOR_API_KEY="$(pass show '{{ cursor_pass }}')"
     exec uv run quiz-web
+
+# Same as web-cursor, but auto-reloads on py/html/css/js changes under src/
+web-cursor-dev:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! uv run python -c 'import cursor_sdk' >/dev/null 2>&1; then
+      uv sync --extra web --extra host --extra cursor --group dev
+    fi
+    export QUIZ_HOST=cursor
+    export CURSOR_API_KEY
+    CURSOR_API_KEY="$(pass show '{{ cursor_pass }}')"
+    exec uv run uvicorn quiz_web.app:app \
+      --host 127.0.0.1 \
+      --port 8765 \
+      --reload \
+      --reload-dir src \
+      --reload-include '*.py' \
+      --reload-include '*.html' \
+      --reload-include '*.css' \
+      --reload-include '*.js'

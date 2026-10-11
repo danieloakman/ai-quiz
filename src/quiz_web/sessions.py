@@ -23,6 +23,9 @@ class PlaySession:
     finished: bool = False
     last_result: dict | None = None
     history: list[dict] = field(default_factory=list)
+    dealing: bool = False
+    deal_error: str | None = None
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 class SessionStore:
