@@ -4,21 +4,33 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quiz-data"
-version = "0.1.0"
+version = "0.2.0"
 description = "CLI API for couples-quiz topic knowledge (facts, glossary, references)"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
+host = [
+  "httpx>=0.27",
+]
+cursor = [
+  "cursor-sdk",
+]
 web = [
   "fastapi>=0.115",
   "uvicorn[standard]>=0.32",
   "jinja2>=3.1",
   "python-multipart>=0.0.12",
+  "httpx>=0.27",
 ]
+
+[dependency-groups]
 dev = [
   "pytest>=8",
+  "ruff>=0.9",
   "httpx>=0.27",
 ]
 
@@ -32,6 +44,28 @@ where = ["src"]
 [tool.setuptools.package-data]
 quiz_web = ["templates/*.html", "static/*"]
 
+[tool.uv]
+package = true
+default-groups = ["dev"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle
+  "F",   # pyflakes
+  "I",   # isort
+  "UP",  # pyupgrade
+  "B",   # bugbear
+  "SIM", # simplify
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["quiz_data", "quiz_host", "quiz_web"]

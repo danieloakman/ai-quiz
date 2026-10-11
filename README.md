@@ -14,26 +14,47 @@ Topic data stays on your machine under `topics/` (gitignored). Agents never hand
 
 ## Setup
 
+Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/). Dependencies are locked in `uv.lock`. Licensed under [MIT](LICENSE).
+
 With [direnv](https://direnv.net/) + Nix flakes (recommended):
 
 ```bash
-direnv allow   # reads .envrc → use flake; creates .venv and installs quiz_data
+direnv allow   # flake.nix → uv sync from uv.lock (web + host + dev)
 ```
 
 Manual:
 
 ```bash
-uv venv && source .venv/bin/activate
-uv pip install -e ".[web,dev]"   # omit extras for CLI-only
+uv sync --extra web --extra host --group dev
+# optional Cursor Agent SDK host:
+# uv sync --extra web --extra host --extra cursor --group dev
 ```
 
-Python 3.11+ required (`uv` recommended).
+Common tasks (optional [just](https://github.com/casey/just)):
+
+```bash
+just sync      # uv sync from lockfile
+just check     # ruff + pytest (same as CI)
+just test
+just web       # quiz-web
+```
 
 ## Web UI
 
-Browse topic stats and play deterministic MCQ / yes-no rounds (no LLM). Difficulty can change mid-run for the next question. Research still uses the CLI/agent.
+Browse topic stats and play agent-authored rounds (mcq, yes-no, freeform). Python samples knowledge via `quiz_data`; a pluggable `QuizHost` authors and grades each turn. Difficulty can change mid-run for the next question.
 
 ```bash
+# OpenAI-compatible host (Ollama, OpenRouter, vLLM, …)
+export QUIZ_HOST=llm
+export QUIZ_LLM_BASE_URL=http://127.0.0.1:11434/v1
+export QUIZ_LLM_MODEL=llama3.2
+# export QUIZ_LLM_API_KEY=...   # if your provider needs it
+
+# or Cursor Agent SDK host
+# export QUIZ_HOST=cursor
+# export CURSOR_API_KEY=cursor_...
+# export QUIZ_CURSOR_MODEL=composer-2.5
+
 quiz-web          # http://127.0.0.1:8765
 # or: uvicorn quiz_web.app:app --reload --port 8765
 ```
@@ -45,9 +66,10 @@ quiz-web          # http://127.0.0.1:8765
 | `quiz_data` CLI | Controlled API: create topics, add facts/glossary/references, sample for a turn |
 | `topics/<slug>/` | Local fact bank (gitignored); subtopics hold `facts.txt` + `glossary.txt` |
 | `agents/` | Harness-agnostic contracts for researcher and quiz host |
-| `quiz-web` | Local browse + deterministic play UI |
+| `quiz_host` | In-process host protocol: OpenAI-compatible LLM or Cursor Agent SDK |
+| `quiz-web` | Local browse + agent-hosted play UI |
 
-Playtime stays token-cheap: the host calls `sample-for-question` and only sees a tiny slice (target fact + glossary peers), not the whole topic.
+Playtime stays token-cheap: each turn samples a tiny slice (target fact + glossary peers), not the whole topic.
 
 **Difficulty:** `easy` · `moderate` · `hard` (how tightly MCQ distractors stay in the same subtopic).  
 **Readiness:** a subtopic needs ≥8 facts to be dealt; hard MCQ also wants ≥4 glossary terms.
@@ -82,4 +104,4 @@ Point your agent at this repo (with `quiz_data` on `PATH`), then:
 
 ## Status
 
-Local files + CLI (any shell-capable agent) plus optional deterministic web play. Topic corpora are not committed. Freeform-in-browser, vectors, and persisted scores are still out of scope.
+Local files + CLI (any shell-capable agent) plus optional web play via `quiz_host` (LLM or Cursor SDK). Topic corpora are not committed. Vectors and persisted scores are still out of scope.

@@ -1,5 +1,7 @@
 # Quiz host agent
 
+Interactive harness contract for chat-based hosting. The in-process package `quiz_host` implements the same rules for `quiz-web` (sample via library/CLI, author + grade one question per turn).
+
 ## Trigger
 
 Example: `Topic: pokemon. Formats: mcq, freeform. Questions: 12. Difficulty: hard.`

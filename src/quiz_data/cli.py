@@ -204,9 +204,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
 
 
 def _cmd_sample(args: argparse.Namespace) -> int:
-    sample = sample_for_question(
-        args.topic, args.difficulty, peers=args.peers
-    )
+    sample = sample_for_question(args.topic, args.difficulty, peers=args.peers)
     sys.stdout.write(format_sample(sample))
     return 0
 

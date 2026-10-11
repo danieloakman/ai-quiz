@@ -24,6 +24,7 @@
           packages = [
             python
             pkgs.uv
+            pkgs.just
           ];
           shellHook = ''
             export UV_PYTHON="${python}/bin/python"
@@ -32,18 +33,17 @@
               uv venv --python "$UV_PYTHON" .venv
             fi
 
-            stamp=.venv/.quiz-data-installed
-            need_install=0
+            # Keep the venv aligned with the committed uv.lock.
+            stamp=.venv/.uv-sync-stamp
+            need_sync=0
             if [ ! -f "$stamp" ]; then
-              need_install=1
-            elif [ pyproject.toml -nt "$stamp" ]; then
-              need_install=1
-            elif find src/quiz_data src/quiz_web -type f -newer "$stamp" 2>/dev/null | grep -q .; then
-              need_install=1
+              need_sync=1
+            elif [ pyproject.toml -nt "$stamp" ] || [ uv.lock -nt "$stamp" ]; then
+              need_sync=1
             fi
 
-            if [ "$need_install" = 1 ]; then
-              uv pip install --python .venv/bin/python -e ".[web,dev]"
+            if [ "$need_sync" = 1 ]; then
+              uv sync --extra web --extra host --group dev
               touch "$stamp"
             fi
 

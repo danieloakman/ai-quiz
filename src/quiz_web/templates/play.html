@@ -28,13 +28,23 @@
 </section>
 {% elif session.question %}
 <section class="section question">
-  <p class="format-tag">{% if session.question.format == 'mcq' %}Multiple Choice Question{% elif session.question.format == 'yes-no' %}Yes / No{% else %}{{ session.question.format }}{% endif %} · {{ session.question.subtopic }}</p>
+  <p class="format-tag">{% if session.question.format == 'mcq' %}Multiple Choice Question{% elif session.question.format == 'yes-no' %}Yes / No{% elif session.question.format == 'freeform' %}Freeform{% else %}{{ session.question.format }}{% endif %} · {{ session.question.subtopic }}</p>
   <h1 class="prompt">{{ session.question.prompt }}</h1>
+  {% if session.question.format == 'freeform' %}
+  <form method="post" action="/play/{{ session.id }}/answer" class="freeform">
+    <label>
+      Your answer
+      <textarea name="answer" rows="3" required placeholder="Type your answer"></textarea>
+    </label>
+    <button class="btn primary" type="submit">Submit</button>
+  </form>
+  {% else %}
   <form method="post" action="/play/{{ session.id }}/answer" class="options">
     {% for opt in session.question.options %}
     <button class="option" type="submit" name="answer" value="{{ opt }}">{{ opt }}</button>
     {% endfor %}
   </form>
+  {% endif %}
 </section>
 
 <section class="section settings">

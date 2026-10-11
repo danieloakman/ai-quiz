@@ -144,7 +144,7 @@ def add_glossary(
     if not term or not gloss:
         raise QuizDataError(
             "Both --term and --gloss are required and must be non-empty.\n"
-            'Example: quiz_data add-glossary --topic pokemon --subtopic types '
+            "Example: quiz_data add-glossary --topic pokemon --subtopic types "
             '--term "Pikachu" --gloss "Electric-type Mouse Pokémon"'
         )
     if "\n" in term or "\n" in gloss:
@@ -165,7 +165,7 @@ def add_glossary(
         path = topic_dir(topic) / "glossary.txt"
 
     existing_terms = {
-        parse_glossary_line(l)[0].casefold() for l in read_content_lines(path)
+        parse_glossary_line(line)[0].casefold() for line in read_content_lines(path)
     }
     if term.casefold() in existing_terms:
         raise QuizDataError(
@@ -236,9 +236,7 @@ def list_subtopic_slugs(topic: str) -> list[str]:
     if not root.is_dir():
         return []
     return sorted(
-        p.name
-        for p in root.iterdir()
-        if p.is_dir() and not p.name.startswith("_")
+        p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("_")
     )
 
 
@@ -257,7 +255,7 @@ def subtopic_status(topic: str, subtopic: str) -> SubtopicStatus:
 
 
 def load_topic_meta(topic: str) -> dict[str, str]:
-    """Return meta.toml fields (slug, title, notes). Missing title falls back to slug."""
+    """Return slug/title/notes from meta.toml."""
     path = require_topic(topic) / "meta.toml"
     data: dict[str, str] = {"slug": topic, "title": topic, "notes": ""}
     if not path.is_file():
@@ -315,7 +313,7 @@ def _normalize_single_line(value: str, *, field: str) -> str:
     if not value:
         raise QuizDataError(
             f"{field} must be non-empty.\n"
-            f'Example: quiz_data add-fact --topic pokemon --subtopic types '
+            f"Example: quiz_data add-fact --topic pokemon --subtopic types "
             f'--claim "Pikachu is an Electric-type Pokémon."'
         )
     if "\n" in value or "\r" in value:

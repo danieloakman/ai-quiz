@@ -48,11 +48,7 @@ def sample_for_question(
         raise QuizDataError("--peers must be >= 0.")
 
     rng = rng or random.Random()
-    ready = [
-        s
-        for s in list_subtopic_slugs(topic)
-        if subtopic_status(topic, s).ready
-    ]
+    ready = [s for s in list_subtopic_slugs(topic) if subtopic_status(topic, s).ready]
     if not ready:
         raise QuizDataError(
             f"No quiz-ready subtopics for topic {topic!r} "

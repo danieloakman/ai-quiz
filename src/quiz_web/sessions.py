@@ -6,7 +6,7 @@ import secrets
 import threading
 from dataclasses import dataclass, field
 
-from quiz_data.questions import BuiltQuestion
+from quiz_host.protocols import BuiltQuestion
 
 
 @dataclass

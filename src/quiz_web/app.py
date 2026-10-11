@@ -1,9 +1,8 @@
-"""FastAPI app: topic browse + deterministic play."""
+"""FastAPI app: topic browse + agent-hosted play."""
 
 from __future__ import annotations
 
 from pathlib import Path
-
 from typing import Annotated
 
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -12,21 +11,37 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from quiz_data.errors import QuizDataError
-from quiz_data.questions import build_question
-from quiz_data.sample import DIFFICULTIES
+from quiz_data.sample import DIFFICULTIES, sample_for_question
 from quiz_data.store import list_topic_slugs, load_topic_meta, topic_status
+from quiz_host.errors import QuizHostError
+from quiz_host.factory import host_from_env
+from quiz_host.parse import normalize_formats
+from quiz_host.protocols import FORMATS, QuizHost
 from quiz_web.sessions import PlaySession, SessionStore, new_session_id
 
 _PKG = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_PKG / "templates"))
 sessions = SessionStore()
+_host: QuizHost | None = None
 
-app = FastAPI(title="ai-quiz", version="0.1.0")
+app = FastAPI(title="ai-quiz", version="0.2.0")
 app.mount("/static", StaticFiles(directory=str(_PKG / "static")), name="static")
 
 
 def create_app() -> FastAPI:
     return app
+
+
+def get_host() -> QuizHost:
+    global _host
+    if _host is None:
+        _host = host_from_env()
+    return _host
+
+
+def set_host(host: QuizHost | None) -> None:
+    global _host
+    _host = host
 
 
 def main() -> None:
@@ -88,11 +103,50 @@ def _deal(session: PlaySession) -> None:
         session.finished = True
         session.current = None
         return
-    session.current = build_question(
-        session.topic,
-        session.difficulty,
-        session.formats,
-    )
+    sample = sample_for_question(session.topic, session.difficulty)
+    session.current = get_host().deal(sample, session.formats)
+
+
+def _grade_and_advance(session: PlaySession, chosen: str) -> None:
+    q = session.current
+    assert q is not None
+    result_grade = get_host().grade(q, chosen)
+    if result_grade.correct:
+        session.score += 1
+    session.answered += 1
+    result = {
+        "correct": result_grade.correct,
+        "chosen": chosen,
+        "expected": q.correct,
+        "explanation": result_grade.explanation,
+        "prompt": q.prompt,
+        "format": q.format,
+    }
+    session.last_result = result
+    session.history.append(result)
+    session.current = None
+
+    if session.answered >= session.questions_total:
+        session.finished = True
+    else:
+        _deal(session)
+
+
+def _parse_formats(raw: list[str] | None) -> list[str]:
+    if not raw:
+        return list(FORMATS)
+    try:
+        return normalize_formats(raw)
+    except QuizHostError as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from None
+
+
+def _http_host_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, QuizHostError):
+        return HTTPException(status_code=502, detail=exc.message)
+    if isinstance(exc, QuizDataError):
+        return HTTPException(status_code=400, detail=exc.message)
+    return HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -120,6 +174,7 @@ def topic_detail(request: Request, slug: str) -> HTMLResponse:
         {
             "topic": st,
             "difficulties": DIFFICULTIES,
+            "formats": FORMATS,
         },
     )
 
@@ -148,24 +203,20 @@ def start_play(
     if difficulty not in DIFFICULTIES:
         raise HTTPException(status_code=400, detail="Invalid difficulty.")
 
-    if not formats:
-        formats = ["mcq", "yes-no"]
-    formats = [f.strip().lower() for f in formats if f.strip()]
-    if not formats:
-        formats = ["mcq", "yes-no"]
+    fmt_list = _parse_formats(formats)
 
     session = PlaySession(
         id=new_session_id(),
         topic=topic,
         title=meta["title"],
-        formats=formats,
+        formats=fmt_list,
         questions_total=questions,
         difficulty=difficulty,
     )
     try:
         _deal(session)
-    except QuizDataError as exc:
-        raise HTTPException(status_code=400, detail=exc.message) from None
+    except (QuizDataError, QuizHostError) as exc:
+        raise _http_host_error(exc) from None
     sessions.create(session)
     return RedirectResponse(url=f"/play/{session.id}", status_code=303)
 
@@ -193,31 +244,10 @@ def answer_play(session_id: str, answer: str = Form(...)):
     if session.finished or session.current is None:
         raise HTTPException(status_code=400, detail="No active question.")
 
-    q = session.current
-    chosen = answer.strip()
-    correct = chosen == q.correct
-    if correct:
-        session.score += 1
-    session.answered += 1
-    result = {
-        "correct": correct,
-        "chosen": chosen,
-        "expected": q.correct,
-        "explanation": q.explanation,
-        "prompt": q.prompt,
-        "format": q.format,
-    }
-    session.last_result = result
-    session.history.append(result)
-    session.current = None
-
-    if session.answered >= session.questions_total:
-        session.finished = True
-    else:
-        try:
-            _deal(session)
-        except QuizDataError as exc:
-            raise HTTPException(status_code=400, detail=exc.message) from None
+    try:
+        _grade_and_advance(session, answer.strip())
+    except (QuizDataError, QuizHostError) as exc:
+        raise _http_host_error(exc) from None
 
     return RedirectResponse(url=f"/play/{session.id}", status_code=303)
 
@@ -231,8 +261,6 @@ def set_difficulty(session_id: str, difficulty: str = Form(...)):
     if difficulty not in DIFFICULTIES:
         raise HTTPException(status_code=400, detail="Invalid difficulty.")
     session.difficulty = difficulty
-    # Apply to next deal: if a question is already showing, rebuild it
-    # only when unanswered — mid-run means next question. Keep current.
     return RedirectResponse(url=f"/play/{session.id}", status_code=303)
 
 
@@ -257,7 +285,7 @@ def api_start_play(payload: dict):
     topic = str(payload.get("topic", "")).strip()
     questions = int(payload.get("questions", 5))
     difficulty = str(payload.get("difficulty", "moderate")).strip().lower()
-    formats = payload.get("formats") or ["mcq", "yes-no"]
+    formats = payload.get("formats")
     if isinstance(formats, str):
         formats = [formats]
 
@@ -273,18 +301,20 @@ def api_start_play(payload: dict):
     if difficulty not in DIFFICULTIES:
         raise HTTPException(status_code=400, detail="Invalid difficulty.")
 
+    fmt_list = _parse_formats(formats)
+
     session = PlaySession(
         id=new_session_id(),
         topic=topic,
         title=meta["title"],
-        formats=[str(f).strip().lower() for f in formats],
+        formats=fmt_list,
         questions_total=questions,
         difficulty=difficulty,
     )
     try:
         _deal(session)
-    except QuizDataError as exc:
-        raise HTTPException(status_code=400, detail=exc.message) from None
+    except (QuizDataError, QuizHostError) as exc:
+        raise _http_host_error(exc) from None
     sessions.create(session)
     return _session_view(session)
 
@@ -305,31 +335,11 @@ def api_answer(session_id: str, payload: dict):
     if session.finished or session.current is None:
         raise HTTPException(status_code=400, detail="No active question.")
 
-    q = session.current
     chosen = str(payload.get("answer", "")).strip()
-    correct = chosen == q.correct
-    if correct:
-        session.score += 1
-    session.answered += 1
-    result = {
-        "correct": correct,
-        "chosen": chosen,
-        "expected": q.correct,
-        "explanation": q.explanation,
-        "prompt": q.prompt,
-        "format": q.format,
-    }
-    session.last_result = result
-    session.history.append(result)
-    session.current = None
-
-    if session.answered >= session.questions_total:
-        session.finished = True
-    else:
-        try:
-            _deal(session)
-        except QuizDataError as exc:
-            raise HTTPException(status_code=400, detail=exc.message) from None
+    try:
+        _grade_and_advance(session, chosen)
+    except (QuizDataError, QuizHostError) as exc:
+        raise _http_host_error(exc) from None
 
     return _session_view(session)
 
