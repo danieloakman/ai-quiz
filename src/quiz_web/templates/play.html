@@ -17,10 +17,12 @@
 
 {% if session.last_result %}
 <section class="section result {% if session.last_result.correct %}ok{% else %}bad{% endif %}" aria-live="polite">
-  <h2>{% if session.last_result.correct %}Correct{% else %}Not quite{% endif %}</h2>
+  <h2>{% if session.last_result.correct %}Correct{% elif session.last_result.timed_out %}Time's up{% else %}Not quite{% endif %}</h2>
   <p class="explain">{{ session.last_result.explanation }}</p>
-  {% if not session.last_result.correct %}
+  {% if not session.last_result.correct and not session.last_result.timed_out %}
   <p class="muted">You answered {{ session.last_result.chosen }}; expected {{ session.last_result.expected }}.</p>
+  {% elif session.last_result.timed_out %}
+  <p class="muted">Expected {{ session.last_result.expected }}.</p>
   {% endif %}
 </section>
 {% endif %}
@@ -50,9 +52,22 @@
 {% elif session.question %}
 <section class="section question">
   <p class="format-tag">{% if session.question.format == 'mcq' %}Multiple Choice Question{% elif session.question.format == 'yes-no' %}Yes / No{% elif session.question.format == 'freeform' %}Freeform{% else %}{{ session.question.format }}{% endif %} · {{ session.question.subtopic }}</p>
+  {% if session.time_limit_seconds %}
+  <p
+    class="timer"
+    id="question-timer"
+    data-seconds="{{ session.time_limit_seconds }}"
+    data-session-id="{{ session.id }}"
+    role="timer"
+    aria-live="polite"
+  >
+    <span class="timer-label">Time left</span>
+    <span class="timer-value">{{ session.time_limit_seconds }}</span>s
+  </p>
+  {% endif %}
   <h1 class="prompt">{{ session.question.prompt }}</h1>
   {% if session.question.format == 'freeform' %}
-  <form method="post" action="/play/{{ session.id }}/answer" class="freeform" data-busy-message="Checking your answer…">
+  <form method="post" action="/play/{{ session.id }}/answer" class="freeform answer-form" data-busy-message="Checking your answer…">
     <label>
       Your answer
       <textarea name="answer" rows="3" required placeholder="Type your answer"></textarea>
@@ -60,10 +75,23 @@
     <button class="btn primary" type="submit">Submit</button>
   </form>
   {% else %}
-  <form method="post" action="/play/{{ session.id }}/answer" class="options" data-busy-message="Checking your answer…">
+  <form method="post" action="/play/{{ session.id }}/answer" class="options answer-form" data-busy-message="Checking your answer…">
     {% for opt in session.question.options %}
     <button class="option" type="submit" name="answer" value="{{ opt }}">{{ opt }}</button>
     {% endfor %}
+  </form>
+  {% endif %}
+  {% if session.time_limit_seconds %}
+  <form
+    method="post"
+    action="/play/{{ session.id }}/answer"
+    id="timeout-form"
+    class="timeout-form"
+    hidden
+    data-busy-message="Time's up…"
+  >
+    <input type="hidden" name="timed_out" value="1" />
+    <input type="hidden" name="answer" value="" />
   </form>
   {% endif %}
 </section>
@@ -85,6 +113,9 @@
         </label>
         <span class="hint">Applies to the next question</span>
       </form>
+      {% if session.time_limit_seconds %}
+      <p class="hint settings-body">{{ session.time_limit_seconds }}s per question</p>
+      {% endif %}
     </div>
   </details>
 </section>
@@ -92,4 +123,5 @@
 {% endblock %}
 {% block scripts %}
 <script src="/static/next-gate.js" defer></script>
+<script src="/static/question-timer.js" defer></script>
 {% endblock %}

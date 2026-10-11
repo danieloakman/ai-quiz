@@ -63,6 +63,17 @@
         {% endfor %}
       </select>
     </label>
+    <label>
+      Seconds per question
+      <input
+        type="number"
+        name="time_limit_seconds"
+        min="1"
+        max="600"
+        placeholder="Optional"
+      />
+    </label>
+    <p class="hint">Leave blank for no time limit. Example timed round: 30.</p>
     <fieldset>
       <legend>Formats</legend>
       <label class="check">

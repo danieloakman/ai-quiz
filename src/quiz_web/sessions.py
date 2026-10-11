@@ -17,6 +17,7 @@ class PlaySession:
     formats: list[str]
     questions_total: int
     difficulty: str
+    time_limit_seconds: int | None = None
     score: int = 0
     answered: int = 0
     current: BuiltQuestion | None = None
