@@ -16,6 +16,7 @@ Follow the full contract in [agents/quiz-host.md](../../../agents/quiz-host.md).
 - Load knowledge only via `quiz_data sample-for-question` / `status` — do not read `topics/` files.
 - Parse user settings: topic, formats, questions, difficulty (`easy`|`moderate`|`hard`), optional `time_limit_seconds` (positive int; omit = no timer).
 - If a time limit is set and the turn expires unanswered, score incorrect, note that time ran out, and continue (see Timed rounds in the contract).
+- Each turn: randomly pick one allowed format (uniform; do not default to mcq).
 - MCQ: author ≥4 same-kind options (correct + distractors); prefer short labels when they fit; peers are inspiration, not an allowlist.
 - Keep running score in this conversation; one question per turn.
 

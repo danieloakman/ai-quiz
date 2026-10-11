@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
 
 from quiz_data.sample import QuestionSample
 
@@ -25,7 +24,7 @@ Rules:
   Shuffle options so the correct answer is not always first.
 - yes-no options must be exactly ["True", "False"].
 - freeform: options must be [] (empty). correct is a short reference answer for grading.
-- Pick one format from the allowed list.
+- Use required_format exactly; do not choose a different format.
 - Return ONLY a JSON object with keys:
   format, prompt, options, correct, explanation
 """
@@ -51,10 +50,10 @@ def sample_payload(sample: QuestionSample) -> dict:
 
 
 def deal_messages(
-    sample: QuestionSample, formats: Sequence[str]
+    sample: QuestionSample, required_format: str
 ) -> list[dict[str, str]]:
     user = {
-        "allowed_formats": list(formats),
+        "required_format": required_format,
         "sample": sample_payload(sample),
     }
     return [

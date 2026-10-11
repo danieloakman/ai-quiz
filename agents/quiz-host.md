@@ -24,7 +24,7 @@ Timed example: `… Difficulty: hard. Time limit: 10 seconds per question.`
 3. Keep score in this conversation (no session DB in v1).
 4. Each turn:
    1. `quiz_data sample-for-question --topic <slug> --difficulty <tier> --peers 3`
-   2. Pick one allowed format.
+   2. **Randomly** pick one allowed format (uniform among the player's choices; do not default to `mcq`).
    3. Ask **exactly one** question.
    4. Wait for the answer (or until `time_limit_seconds` elapses — see Timed rounds).
    5. Grade; short explain; update score.

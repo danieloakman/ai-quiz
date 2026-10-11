@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import random
 import re
 from collections.abc import Sequence
 
@@ -54,6 +55,17 @@ def normalize_formats(formats: Sequence[str]) -> list[str]:
             seen.add(fmt)
             out.append(fmt)
     return out
+
+
+def choose_format(
+    formats: Sequence[str],
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Pick one allowed format uniformly (avoids LLM MCQ bias)."""
+    allowed = normalize_formats(formats)
+    picker = rng if rng is not None else random
+    return picker.choice(allowed)
 
 
 def question_from_payload(

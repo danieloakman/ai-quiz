@@ -7,9 +7,9 @@ from collections.abc import Callable, Sequence
 from quiz_data.sample import QuestionSample
 from quiz_host.errors import QuizHostError
 from quiz_host.parse import (
+    choose_format,
     extract_json_object,
     grade_from_payload,
-    normalize_formats,
     question_from_payload,
 )
 from quiz_host.prompts import deal_messages, grade_messages
@@ -25,11 +25,15 @@ def deal_with_client(
     *,
     json_mode: bool = True,
 ) -> BuiltQuestion:
-    allowed = normalize_formats(formats)
+    # Pick format in-process so the model cannot bias toward MCQ.
+    required = choose_format(formats)
+    allowed = [required]
     errors: list[str] = []
     for _ in range(_BUILD_ATTEMPTS):
         try:
-            text = client.complete(deal_messages(sample, allowed), json_mode=json_mode)
+            text = client.complete(
+                deal_messages(sample, required), json_mode=json_mode
+            )
             data = extract_json_object(text)
             return question_from_payload(data, sample, allowed)
         except QuizHostError as exc:

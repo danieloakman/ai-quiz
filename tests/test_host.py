@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 
 import httpx
 import pytest
@@ -11,7 +12,8 @@ from quiz_host.errors import QuizHostError
 from quiz_host.factory import host_from_env
 from quiz_host.llm_host import LlmHost
 from quiz_host.openai_compat import OpenAICompatClient
-from quiz_host.parse import extract_json_object, question_from_payload
+from quiz_host.parse import choose_format, extract_json_object, question_from_payload
+from quiz_host.prompts import deal_messages
 from quiz_host.protocols import BuiltQuestion, GradeResult
 
 
@@ -38,6 +40,51 @@ class ScriptedClient:
 def test_extract_json_from_fence():
     data = extract_json_object('Here:\n```json\n{"a": 1}\n```\n')
     assert data == {"a": 1}
+
+
+def test_choose_format_uniform_among_allowed():
+    rng = random.Random(0)
+    formats = ["mcq", "yes-no", "freeform"]
+    picks = [choose_format(formats, rng=rng) for _ in range(60)]
+    assert set(picks) == set(formats)
+    assert all(p in formats for p in picks)
+
+
+def test_deal_messages_require_single_format(ready_topic: str):
+    sample = _sample(ready_topic)
+    messages = deal_messages(sample, "freeform")
+    user = json.loads(messages[1]["content"])
+    assert user["required_format"] == "freeform"
+    assert "allowed_formats" not in user
+
+
+def test_deal_picks_format_before_model(ready_topic: str, monkeypatch: pytest.MonkeyPatch):
+    sample = _sample(ready_topic)
+    monkeypatch.setattr(
+        "quiz_host.authoring.choose_format", lambda formats: "yes-no"
+    )
+    payload = {
+        "format": "yes-no",
+        "prompt": "True or false?",
+        "options": ["True", "False"],
+        "correct": "True",
+        "explanation": sample.target_fact,
+    }
+
+    class CaptureClient:
+        def __init__(self) -> None:
+            self.messages: list | None = None
+
+        def complete(self, messages, *, json_mode: bool = False):
+            del json_mode
+            self.messages = messages
+            return json.dumps(payload)
+
+    client = CaptureClient()
+    q = deal_with_client(client, sample, ["mcq", "yes-no", "freeform"])
+    assert q.format == "yes-no"
+    user = json.loads(client.messages[1]["content"])
+    assert user["required_format"] == "yes-no"
 
 
 def test_openai_compat_client_mock_transport():
