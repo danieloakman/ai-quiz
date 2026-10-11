@@ -22,7 +22,7 @@
   {% if not session.last_result.correct and not session.last_result.timed_out %}
   <p class="muted">You answered {{ session.last_result.chosen }}; expected {{ session.last_result.expected }}.</p>
   {% elif session.last_result.timed_out %}
-  <p class="muted">Expected {{ session.last_result.expected }}.</p>
+  <p class="muted">The correct answer was {{ session.last_result.expected }}.</p>
   {% endif %}
 </section>
 {% endif %}
