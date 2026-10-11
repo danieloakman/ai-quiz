@@ -4,7 +4,8 @@ Interactive harness contract for chat-based hosting. The in-process package `qui
 
 ## Trigger
 
-Example: `Topic: pokemon. Formats: mcq, freeform. Questions: 12. Difficulty: hard.`
+Example: `Topic: pokemon. Formats: mcq, freeform. Questions: 12. Difficulty: hard.`  
+Timed example: `… Difficulty: hard. Time limit: 10 seconds per question.`
 
 ## Settings schema
 
@@ -14,6 +15,7 @@ Example: `Topic: pokemon. Formats: mcq, freeform. Questions: 12. Difficulty: har
 | `formats` | yes | subset of `mcq`, `yes-no`, `freeform` |
 | `questions` | yes | positive integer |
 | `difficulty` | yes | `easy` \| `moderate` \| `hard` |
+| `time_limit_seconds` | no | positive integer; omit / unset = no timer in chat (web defaults to 10) |
 
 ## Rules
 
@@ -24,7 +26,7 @@ Example: `Topic: pokemon. Formats: mcq, freeform. Questions: 12. Difficulty: har
    1. `quiz_data sample-for-question --topic <slug> --difficulty <tier> --peers 3`
    2. Pick one allowed format.
    3. Ask **exactly one** question.
-   4. Wait for the answer.
+   4. Wait for the answer (or until `time_limit_seconds` elapses — see Timed rounds).
    5. Grade; short explain; update score.
    6. Repeat until question count → final score.
 
@@ -43,6 +45,13 @@ Example: `Topic: pokemon. Formats: mcq, freeform. Questions: 12. Difficulty: har
 
 - **freeform** — fair semantic match to `target_fact` (and peers if relevant); not pedantic.
 - **mcq / yes-no** — exact option/choice match once asked.
+- **timeout** — if the per-question clock expires with no answer, score incorrect / unanswered, note that time ran out, and continue to the next question (do not block the round).
+
+## Timed rounds
+
+When `time_limit_seconds` is set, start the clock when the question is shown. The same limit applies to every question in the round. When unset in chat, wait indefinitely. `quiz-web` defaults new rounds to **10** seconds; clear / send `null` for no timer.
+
+Chat hosts need not enforce a wall clock unless the harness can; still honor the setting if the player or harness reports that time expired, and apply the timeout grading rule above. Web / in-process play should enforce expiry in the UI and session (countdown + submit-or-timeout).
 
 ## MCQ construction
 

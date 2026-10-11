@@ -63,6 +63,17 @@
         {% endfor %}
       </select>
     </label>
+    <label>
+      Seconds per question
+      <input
+        type="number"
+        name="time_limit_seconds"
+        min="1"
+        max="600"
+        value="10"
+      />
+    </label>
+    <p class="hint">Default 10s. Clear the field for no time limit.</p>
     <fieldset>
       <legend>Formats</legend>
       <label class="check">

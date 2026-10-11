@@ -113,6 +113,7 @@ def test_play_flow_and_mid_run_difficulty(client):
     assert start.status_code == 200
     session = start.json()
     assert session["difficulty"] == "easy"
+    assert session["time_limit_seconds"] == 10
     assert session["question"] is not None
     sid = session["id"]
 
@@ -191,3 +192,102 @@ def test_answer_returns_before_slow_deal(
         assert body["dealing"] is False
     finally:
         app_module.set_host(None)
+
+
+def test_start_with_time_limit_and_timeout_advances(client):
+    http, slug = client
+    start = http.post(
+        "/api/play",
+        json={
+            "topic": slug,
+            "questions": 2,
+            "difficulty": "easy",
+            "formats": ["mcq"],
+            "time_limit_seconds": 30,
+        },
+    )
+    assert start.status_code == 200
+    session = start.json()
+    assert session["time_limit_seconds"] == 30
+    assert session["question"] is not None
+    sid = session["id"]
+
+    ans = http.post(
+        f"/api/play/{sid}/answer",
+        json={"timed_out": True},
+    )
+    assert ans.status_code == 200
+    body = ans.json()
+    assert body["answered"] == 1
+    assert body["score"] == 0
+    assert body["last_result"] is not None
+    assert body["last_result"]["correct"] is False
+    assert body["last_result"]["timed_out"] is True
+    assert body["last_result"]["chosen"] == "(no answer)"
+    assert "time ran out" in body["last_result"]["explanation"].lower()
+
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        body = http.get(f"/api/play/{sid}").json()
+        if body["question"] is not None or body["finished"]:
+            break
+        time.sleep(0.05)
+    assert body["question"] is not None or body["finished"]
+
+
+def test_timeout_rejected_without_time_limit(client):
+    http, slug = client
+    start = http.post(
+        "/api/play",
+        json={
+            "topic": slug,
+            "questions": 1,
+            "difficulty": "easy",
+            "formats": ["mcq"],
+            "time_limit_seconds": None,
+        },
+    )
+    assert start.status_code == 200
+    sid = start.json()["id"]
+
+    ans = http.post(
+        f"/api/play/{sid}/answer",
+        json={"timed_out": True},
+    )
+    assert ans.status_code == 400
+    assert "no time limit" in ans.json()["detail"].lower()
+
+
+def test_invalid_time_limit_rejected(client):
+    http, slug = client
+    for bad in [0, -1, 601, "nope"]:
+        r = http.post(
+            "/api/play",
+            json={
+                "topic": slug,
+                "questions": 1,
+                "difficulty": "easy",
+                "formats": ["mcq"],
+                "time_limit_seconds": bad,
+            },
+        )
+        assert r.status_code == 400, bad
+
+
+def test_form_cleared_time_limit_is_untimed(client):
+    http, slug = client
+    start = http.post(
+        "/play",
+        data={
+            "topic": slug,
+            "questions": "1",
+            "difficulty": "easy",
+            "formats": "mcq",
+            "time_limit_seconds": "",
+        },
+        follow_redirects=False,
+    )
+    assert start.status_code == 303
+    sid = start.headers["location"].rsplit("/", 1)[-1]
+    body = http.get(f"/api/play/{sid}").json()
+    assert body["time_limit_seconds"] is None

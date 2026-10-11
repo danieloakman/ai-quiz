@@ -17,8 +17,10 @@ from quiz_data.store import list_topic_slugs, load_topic_meta, topic_status
 from quiz_host.errors import QuizHostError
 from quiz_host.factory import host_from_env
 from quiz_host.parse import normalize_formats
-from quiz_host.protocols import FORMATS, BuiltQuestion, QuizHost
+from quiz_host.protocols import FORMATS, BuiltQuestion, GradeResult, QuizHost
 from quiz_web.sessions import PlaySession, SessionStore, new_session_id
+
+_TIME_LIMIT_MAX = 600
 
 _PKG = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_PKG / "templates"))
@@ -90,6 +92,7 @@ def _session_view(session: PlaySession) -> dict:
         difficulty = session.difficulty
         formats = list(session.formats)
         questions_total = session.questions_total
+        time_limit_seconds = session.time_limit_seconds
 
     return {
         "id": session.id,
@@ -98,6 +101,7 @@ def _session_view(session: PlaySession) -> dict:
         "formats": formats,
         "questions_total": questions_total,
         "difficulty": difficulty,
+        "time_limit_seconds": time_limit_seconds,
         "score": score,
         "answered": answered,
         "remaining": max(0, questions_total - answered),
@@ -139,7 +143,12 @@ def _apply_prefetched(
         session.current = question
 
 
-def _grade_and_prefetch(session: PlaySession, chosen: str) -> None:
+def _grade_and_prefetch(
+    session: PlaySession,
+    chosen: str,
+    *,
+    timed_out: bool = False,
+) -> None:
     """Grade the current answer; prefetch the next question in parallel."""
     q = session.current
     assert q is not None
@@ -169,7 +178,15 @@ def _grade_and_prefetch(session: PlaySession, chosen: str) -> None:
         deal_thread = threading.Thread(target=deal_worker, daemon=True)
         deal_thread.start()
 
-    result_grade = host.grade(q, chosen)
+    if timed_out:
+        result_grade = GradeResult(
+            correct=False,
+            explanation="Time ran out.",
+        )
+        chosen_display = "(no answer)"
+    else:
+        result_grade = host.grade(q, chosen)
+        chosen_display = chosen
 
     with session.lock:
         if result_grade.correct:
@@ -177,11 +194,12 @@ def _grade_and_prefetch(session: PlaySession, chosen: str) -> None:
         session.answered += 1
         result = {
             "correct": result_grade.correct,
-            "chosen": chosen,
+            "chosen": chosen_display,
             "expected": q.correct,
             "explanation": result_grade.explanation,
             "prompt": q.prompt,
             "format": q.format,
+            "timed_out": timed_out,
         }
         session.last_result = result
         session.history.append(result)
@@ -221,6 +239,37 @@ def _parse_formats(raw: list[str] | None) -> list[str]:
         return normalize_formats(raw)
     except QuizHostError as exc:
         raise HTTPException(status_code=400, detail=exc.message) from None
+
+
+def _parse_time_limit(raw: object) -> int | None:
+    if raw is None or raw is False:
+        return None
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return None
+        raw = text
+    try:
+        value = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="time_limit_seconds must be a positive integer.",
+        ) from None
+    if value < 1 or value > _TIME_LIMIT_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"time_limit_seconds must be 1–{_TIME_LIMIT_MAX}.",
+        )
+    return value
+
+
+def _truthy_flag(raw: object) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return False
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _http_host_error(exc: Exception) -> HTTPException:
@@ -267,6 +316,7 @@ def start_play(
     questions: Annotated[int, Form()] = 5,
     difficulty: Annotated[str, Form()] = "moderate",
     formats: Annotated[list[str] | None, Form()] = None,
+    time_limit_seconds: Annotated[str | None, Form()] = None,
 ):
     try:
         meta = load_topic_meta(topic)
@@ -286,6 +336,7 @@ def start_play(
         raise HTTPException(status_code=400, detail="Invalid difficulty.")
 
     fmt_list = _parse_formats(formats)
+    limit = _parse_time_limit(time_limit_seconds)
 
     session = PlaySession(
         id=new_session_id(),
@@ -294,6 +345,7 @@ def start_play(
         formats=fmt_list,
         questions_total=questions,
         difficulty=difficulty,
+        time_limit_seconds=limit,
     )
     try:
         _deal(session)
@@ -319,15 +371,26 @@ def play_page(request: Request, session_id: str) -> HTMLResponse:
 
 
 @app.post("/play/{session_id}/answer")
-def answer_play(session_id: str, answer: str = Form(...)):
+def answer_play(
+    session_id: str,
+    answer: Annotated[str, Form()] = "",
+    timed_out: Annotated[str | None, Form()] = None,
+):
     session = sessions.get(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found.")
     if session.finished or session.dealing or session.current is None:
         raise HTTPException(status_code=400, detail="No active question.")
 
+    out = _truthy_flag(timed_out)
+    if out and session.time_limit_seconds is None:
+        raise HTTPException(
+            status_code=400,
+            detail="This round has no time limit.",
+        )
+
     try:
-        _grade_and_prefetch(session, answer.strip())
+        _grade_and_prefetch(session, answer.strip(), timed_out=out)
     except (QuizDataError, QuizHostError) as exc:
         raise _http_host_error(exc) from None
 
@@ -370,6 +433,10 @@ def api_start_play(payload: dict):
     formats = payload.get("formats")
     if isinstance(formats, str):
         formats = [formats]
+    if "time_limit_seconds" in payload:
+        limit = _parse_time_limit(payload.get("time_limit_seconds"))
+    else:
+        limit = 10
 
     try:
         meta = load_topic_meta(topic)
@@ -392,6 +459,7 @@ def api_start_play(payload: dict):
         formats=fmt_list,
         questions_total=questions,
         difficulty=difficulty,
+        time_limit_seconds=limit,
     )
     try:
         _deal(session)
@@ -417,9 +485,16 @@ def api_answer(session_id: str, payload: dict):
     if session.finished or session.dealing or session.current is None:
         raise HTTPException(status_code=400, detail="No active question.")
 
+    out = _truthy_flag(payload.get("timed_out"))
+    if out and session.time_limit_seconds is None:
+        raise HTTPException(
+            status_code=400,
+            detail="This round has no time limit.",
+        )
+
     chosen = str(payload.get("answer", "")).strip()
     try:
-        _grade_and_prefetch(session, chosen)
+        _grade_and_prefetch(session, chosen, timed_out=out)
     except (QuizDataError, QuizHostError) as exc:
         raise _http_host_error(exc) from None
 

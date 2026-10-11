@@ -379,6 +379,43 @@ form.is-busy .option:not(.is-loading) {
   font-size: 0.9rem;
 }
 .progress { margin: 0.35rem 0 0; font-weight: 500; }
+
+.timer {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0.75rem 0 1.25rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.04);
+}
+.timer-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.timer-value {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+.timer.urgent {
+  border-color: var(--bad);
+  color: var(--bad);
+  animation: pulse-urgent 0.9s ease-in-out infinite;
+}
+.timer.urgent .timer-label { color: var(--bad); }
+
+@keyframes pulse-urgent {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer.urgent { animation: none; }
+}
 .settings {
   margin-top: 2.75rem;
   padding-top: 1.25rem;
