@@ -33,11 +33,15 @@ uv sync --extra web --extra host --group dev
 Common tasks (optional [just](https://github.com/casey/just)):
 
 ```bash
-just sync      # uv sync from lockfile
-just check     # ruff + pytest (same as CI)
+just sync         # uv sync from lockfile
+just sync-cursor  # also install cursor-sdk
+just check        # ruff + pytest (same as CI)
 just test
-just web       # quiz-web
+just web          # quiz-web (needs QUIZ_HOST in env)
+just web-cursor   # quiz-web with QUIZ_HOST=cursor; key from `pass`
 ```
+
+`just web-cursor` runs `pass show api_keys/personal/cursor_ai` for `CURSOR_API_KEY`. Override the path with `CURSOR_PASS_PATH=...` or `just cursor_pass=... web-cursor`.
 
 ## Web UI
 
@@ -50,13 +54,13 @@ export QUIZ_LLM_BASE_URL=http://127.0.0.1:11434/v1
 export QUIZ_LLM_MODEL=llama3.2
 # export QUIZ_LLM_API_KEY=...   # if your provider needs it
 
-# or Cursor Agent SDK host
+# or Cursor Agent SDK host (easiest: just web-cursor)
 # export QUIZ_HOST=cursor
-# export CURSOR_API_KEY=cursor_...
+# export CURSOR_API_KEY="$(pass show api_keys/personal/cursor_ai)"
 # export QUIZ_CURSOR_MODEL=composer-2.5
 
-quiz-web          # http://127.0.0.1:8765
-# or: uvicorn quiz_web.app:app --reload --port 8765
+just web-cursor   # http://127.0.0.1:8765
+# or: quiz-web / uvicorn quiz_web.app:app --reload --port 8765
 ```
 
 ## How it works
