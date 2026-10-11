@@ -272,3 +272,22 @@ def test_invalid_time_limit_rejected(client):
             },
         )
         assert r.status_code == 400, bad
+
+
+def test_form_cleared_time_limit_is_untimed(client):
+    http, slug = client
+    start = http.post(
+        "/play",
+        data={
+            "topic": slug,
+            "questions": "1",
+            "difficulty": "easy",
+            "formats": "mcq",
+            "time_limit_seconds": "",
+        },
+        follow_redirects=False,
+    )
+    assert start.status_code == 303
+    sid = start.headers["location"].rsplit("/", 1)[-1]
+    body = http.get(f"/api/play/{sid}").json()
+    assert body["time_limit_seconds"] is None

@@ -316,7 +316,7 @@ def start_play(
     questions: Annotated[int, Form()] = 5,
     difficulty: Annotated[str, Form()] = "moderate",
     formats: Annotated[list[str] | None, Form()] = None,
-    time_limit_seconds: Annotated[str | None, Form()] = "10",
+    time_limit_seconds: Annotated[str | None, Form()] = None,
 ):
     try:
         meta = load_topic_meta(topic)
