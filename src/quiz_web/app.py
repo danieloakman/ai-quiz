@@ -104,9 +104,7 @@ def _session_view(session: PlaySession) -> dict:
         "finished": finished,
         "dealing": dealing,
         "deal_error": deal_error,
-        "question": (
-            _public_question(current) if current and not finished else None
-        ),
+        "question": (_public_question(current) if current and not finished else None),
         "last_result": last_result,
         "history": history,
     }
