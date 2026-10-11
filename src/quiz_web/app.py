@@ -316,7 +316,7 @@ def start_play(
     questions: Annotated[int, Form()] = 5,
     difficulty: Annotated[str, Form()] = "moderate",
     formats: Annotated[list[str] | None, Form()] = None,
-    time_limit_seconds: Annotated[str | None, Form()] = None,
+    time_limit_seconds: Annotated[str | None, Form()] = "10",
 ):
     try:
         meta = load_topic_meta(topic)
@@ -433,7 +433,10 @@ def api_start_play(payload: dict):
     formats = payload.get("formats")
     if isinstance(formats, str):
         formats = [formats]
-    limit = _parse_time_limit(payload.get("time_limit_seconds"))
+    if "time_limit_seconds" in payload:
+        limit = _parse_time_limit(payload.get("time_limit_seconds"))
+    else:
+        limit = 10
 
     try:
         meta = load_topic_meta(topic)

@@ -113,7 +113,7 @@ def test_play_flow_and_mid_run_difficulty(client):
     assert start.status_code == 200
     session = start.json()
     assert session["difficulty"] == "easy"
-    assert session["time_limit_seconds"] is None
+    assert session["time_limit_seconds"] == 10
     assert session["question"] is not None
     sid = session["id"]
 
@@ -244,6 +244,7 @@ def test_timeout_rejected_without_time_limit(client):
             "questions": 1,
             "difficulty": "easy",
             "formats": ["mcq"],
+            "time_limit_seconds": None,
         },
     )
     assert start.status_code == 200
