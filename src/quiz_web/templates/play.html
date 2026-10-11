@@ -20,9 +20,9 @@
   <h2>{% if session.last_result.correct %}Correct{% elif session.last_result.timed_out %}Time's up{% else %}Not quite{% endif %}</h2>
   <p class="explain">{{ session.last_result.explanation }}</p>
   {% if not session.last_result.correct and not session.last_result.timed_out %}
-  <p class="muted">You answered {{ session.last_result.chosen }}; expected {{ session.last_result.expected }}.</p>
+  <p class="muted">You answered “{{ session.last_result.chosen }}”; expected “{{ session.last_result.expected }}”.</p>
   {% elif session.last_result.timed_out %}
-  <p class="muted">The correct answer was {{ session.last_result.expected }}.</p>
+  <p class="muted">The correct answer was “{{ session.last_result.expected }}”.</p>
   {% endif %}
 </section>
 {% endif %}
