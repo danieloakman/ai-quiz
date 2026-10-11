@@ -21,6 +21,7 @@ from quiz_host.protocols import FORMATS, BuiltQuestion, GradeResult, QuizHost
 from quiz_web.sessions import PlaySession, SessionStore, new_session_id
 
 _TIME_LIMIT_MAX = 600
+_PREFETCH_AHEAD = 2
 
 _PKG = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(_PKG / "templates"))
@@ -129,18 +130,79 @@ def _exc_message(error: BaseException) -> str:
     return str(error)
 
 
-def _apply_prefetched(
+def _prefetch_target(session: PlaySession) -> int:
+    """How many questions should sit in the buffer ahead of `current`."""
+    after_current = session.questions_total - session.answered
+    if session.current is not None:
+        after_current -= 1
+    return min(_PREFETCH_AHEAD, max(0, after_current))
+
+
+def _invalidate_prefetch(session: PlaySession) -> None:
+    """Drop buffered + in-flight prefetch (call with session.lock held)."""
+    session.prefetch.clear()
+    session.prefetch_generation += 1
+    session.prefetch_worker_active = False
+
+
+def _ensure_prefetch(session: PlaySession) -> None:
+    """Top up the ahead buffer in the background (up to `_PREFETCH_AHEAD`)."""
+    with session.lock:
+        if session.finished or session.prefetch_worker_active:
+            return
+        if len(session.prefetch) >= _prefetch_target(session):
+            return
+        session.prefetch_worker_active = True
+        generation = session.prefetch_generation
+
+    host = get_host()
+
+    def worker() -> None:
+        try:
+            while True:
+                with session.lock:
+                    if session.finished or generation != session.prefetch_generation:
+                        return
+                    if len(session.prefetch) >= _prefetch_target(session):
+                        return
+                    topic = session.topic
+                    difficulty = session.difficulty
+                    formats = list(session.formats)
+                try:
+                    sample = sample_for_question(topic, difficulty)
+                    question = host.deal(sample, formats)
+                except BaseException:  # noqa: BLE001
+                    # Warm-path failures must not break the active turn; the
+                    # cold path deals on demand when the buffer is empty.
+                    return
+                with session.lock:
+                    if session.finished or generation != session.prefetch_generation:
+                        return
+                    session.prefetch.append(question)
+        finally:
+            with session.lock:
+                if generation == session.prefetch_generation:
+                    session.prefetch_worker_active = False
+
+    threading.Thread(target=worker, daemon=True).start()
+
+
+def _apply_on_demand_deal(
     session: PlaySession,
     question: BuiltQuestion | None,
     error: BaseException | None,
 ) -> None:
     with session.lock:
+        # A warm buffer may have won the race while this deal was in flight.
+        if session.current is not None or session.finished:
+            return
         session.dealing = False
         if error is not None:
             session.deal_error = _exc_message(error)
             return
         session.deal_error = None
         session.current = question
+    _ensure_prefetch(session)
 
 
 def _grade_and_prefetch(
@@ -149,7 +211,7 @@ def _grade_and_prefetch(
     *,
     timed_out: bool = False,
 ) -> None:
-    """Grade the current answer; prefetch the next question in parallel."""
+    """Grade the current answer; serve from prefetch buffer or deal on demand."""
     q = session.current
     assert q is not None
     host = get_host()
@@ -159,24 +221,25 @@ def _grade_and_prefetch(
     deal_thread: threading.Thread | None = None
 
     if will_continue:
-        topic = session.topic
-        difficulty = session.difficulty
-        formats = list(session.formats)
-
-        def deal_worker() -> None:
-            try:
-                sample = sample_for_question(topic, difficulty)
-                box["question"] = host.deal(sample, formats)
-            except BaseException as exc:  # noqa: BLE001
-                box["error"] = exc
-            finally:
-                box["done"] = True
-
         with session.lock:
-            session.dealing = True
-            session.deal_error = None
-        deal_thread = threading.Thread(target=deal_worker, daemon=True)
-        deal_thread.start()
+            if not session.prefetch:
+                topic = session.topic
+                difficulty = session.difficulty
+                formats = list(session.formats)
+                session.dealing = True
+                session.deal_error = None
+
+                def deal_worker() -> None:
+                    try:
+                        sample = sample_for_question(topic, difficulty)
+                        box["question"] = host.deal(sample, formats)
+                    except BaseException as exc:  # noqa: BLE001
+                        box["error"] = exc
+                    finally:
+                        box["done"] = True
+
+                deal_thread = threading.Thread(target=deal_worker, daemon=True)
+                deal_thread.start()
 
     if timed_out:
         result_grade = GradeResult(
@@ -188,6 +251,7 @@ def _grade_and_prefetch(
         result_grade = host.grade(q, chosen)
         chosen_display = chosen
 
+    served_now = False
     with session.lock:
         if result_grade.correct:
             session.score += 1
@@ -208,11 +272,17 @@ def _grade_and_prefetch(
         if not will_continue:
             session.finished = True
             session.dealing = False
+            _invalidate_prefetch(session)
             return
 
         session.finished = False
 
-        if box["done"]:
+        if session.prefetch:
+            session.current = session.prefetch.pop(0)
+            session.dealing = False
+            session.deal_error = None
+            served_now = True
+        elif box["done"]:
             err = box["error"]
             session.dealing = False
             if err is not None:
@@ -220,14 +290,18 @@ def _grade_and_prefetch(
             else:
                 session.current = box["question"]
                 session.deal_error = None
-            return
+            served_now = True
 
-    # Deal still running: finish applying on that thread.
+    if served_now:
+        _ensure_prefetch(session)
+        return
+
+    # On-demand deal still running: finish applying on that thread.
     assert deal_thread is not None
 
     def finish() -> None:
         deal_thread.join()
-        _apply_prefetched(session, box["question"], box["error"])
+        _apply_on_demand_deal(session, box["question"], box["error"])
 
     threading.Thread(target=finish, daemon=True).start()
 
@@ -352,6 +426,7 @@ def start_play(
     except (QuizDataError, QuizHostError) as exc:
         raise _http_host_error(exc) from None
     sessions.create(session)
+    _ensure_prefetch(session)
     return RedirectResponse(url=f"/play/{session.id}", status_code=303)
 
 
@@ -405,7 +480,10 @@ def set_difficulty(session_id: str, difficulty: str = Form(...)):
     difficulty = difficulty.strip().lower()
     if difficulty not in DIFFICULTIES:
         raise HTTPException(status_code=400, detail="Invalid difficulty.")
-    session.difficulty = difficulty
+    with session.lock:
+        session.difficulty = difficulty
+        _invalidate_prefetch(session)
+    _ensure_prefetch(session)
     return RedirectResponse(url=f"/play/{session.id}", status_code=303)
 
 
@@ -466,6 +544,7 @@ def api_start_play(payload: dict):
     except (QuizDataError, QuizHostError) as exc:
         raise _http_host_error(exc) from None
     sessions.create(session)
+    _ensure_prefetch(session)
     return _session_view(session)
 
 
@@ -509,5 +588,8 @@ def api_difficulty(session_id: str, payload: dict):
     difficulty = str(payload.get("difficulty", "")).strip().lower()
     if difficulty not in DIFFICULTIES:
         raise HTTPException(status_code=400, detail="Invalid difficulty.")
-    session.difficulty = difficulty
+    with session.lock:
+        session.difficulty = difficulty
+        _invalidate_prefetch(session)
+    _ensure_prefetch(session)
     return _session_view(session)

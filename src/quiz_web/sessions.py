@@ -21,11 +21,16 @@ class PlaySession:
     score: int = 0
     answered: int = 0
     current: BuiltQuestion | None = None
+    # Ready-ahead questions (not exposed in the public session view).
+    prefetch: list[BuiltQuestion] = field(default_factory=list)
     finished: bool = False
     last_result: dict | None = None
     history: list[dict] = field(default_factory=list)
     dealing: bool = False
     deal_error: str | None = None
+    # Bumped to drop in-flight prefetch deals after invalidate (e.g. difficulty).
+    prefetch_generation: int = 0
+    prefetch_worker_active: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
 
 
