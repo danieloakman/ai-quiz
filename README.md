@@ -1,20 +1,37 @@
 # ai-quiz
 
-Topic quiz for date night (or anyone). Research any subject into a local knowledge bank, then play via an agent session or the local web UI.
+Research any subject into a local knowledge bank, then play agent-authored quizzes — in chat or in the browser.
 
-Works with any agent harness that can run shell commands in this repo (Cursor, Claude Code, Codex, OpenCode, etc.). Contracts live in `agents/`. Knowledge I/O is the `quiz_data` CLI/library; optional browser play is `quiz-web`.
+![Playing a Pokemon round](docs/screenshots/play-mcq.png)
 
-## Idea
+Works with any agent harness that can run shell in this repo (Cursor, Claude Code, Codex, OpenCode, …). Contracts live in [`agents/`](agents/). Knowledge I/O is the `quiz_data` CLI; optional browser play is `quiz-web`.
+
+## How it works
 
 1. **Researcher agent** gathers atomic facts + a glossary ahead of time (via CLI).
-2. **Quiz host agent** deals random questions from that bank at playtime.
-3. Formats and difficulty are chosen at game start; scores live in the conversation.
+2. **Quiz host** deals questions from tiny sampled slices of that bank — not the whole topic.
+3. Play in an agent session, or in the local web UI with MCQ / yes-no / freeform rounds.
 
-Topic data stays on your machine under `topics/` (gitignored). Agents never hand-edit those files; they only use the `quiz_data` CLI, so storage can change later without rewriting prompts.
+![Topic browse and play setup](docs/screenshots/home.png)
+
+| Piece | Role |
+| ----- | ---- |
+| `quiz_data` CLI | Create topics, add facts/glossary/references, sample for a turn |
+| `topics/<slug>/` | Local fact bank (gitignored) |
+| `agents/` | Harness-agnostic contracts for researcher and quiz host |
+| `quiz_host` | In-process host: OpenAI-compatible LLM or Cursor Agent SDK |
+| `quiz-web` | Browse topics and play agent-hosted rounds |
+
+**Difficulty:** `easy` · `moderate` · `hard` (how tightly peer glossary context stays in the same subtopic).  
+**Readiness:** a subtopic needs ≥8 facts to be dealt; richer buckets also aim for ≥4 glossary terms.
+
+Topic data stays on your machine. Agents never hand-edit those files — only `quiz_data` — so storage can change later without rewriting prompts.
+
+More detail: [AGENTS.md](AGENTS.md), [docs/topic-format.md](docs/topic-format.md).
 
 ## Setup
 
-Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/). Dependencies are locked in `uv.lock`. Licensed under [MIT](LICENSE).
+Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/). Licensed under [MIT](LICENSE).
 
 With [direnv](https://direnv.net/) + Nix flakes (recommended):
 
@@ -41,11 +58,11 @@ just web          # quiz-web (needs QUIZ_HOST in env)
 just web-cursor   # quiz-web with QUIZ_HOST=cursor; key from `pass`
 ```
 
-`just web-cursor` runs `pass show api_keys/personal/cursor_ai` for `CURSOR_API_KEY`. Override the path with `CURSOR_PASS_PATH=...` or `just cursor_pass=... web-cursor`.
+`just web-cursor` runs `pass show api_keys/personal/cursor_ai` for `CURSOR_API_KEY`. Override with `CURSOR_PASS_PATH=...` or `just cursor_pass=... web-cursor`.
 
 ## Web UI
 
-Browse topic stats and play agent-authored rounds (mcq, yes-no, freeform). Python samples knowledge via `quiz_data`; a pluggable `QuizHost` authors and grades each turn. Difficulty can change mid-run for the next question.
+Browse topic stats and play agent-authored rounds. Python samples knowledge via `quiz_data`; a pluggable `QuizHost` authors and grades each turn. Difficulty can change mid-run.
 
 ```bash
 # OpenAI-compatible host (Ollama, OpenRouter, vLLM, …)
@@ -63,22 +80,7 @@ just web-cursor   # http://127.0.0.1:8765
 # or: quiz-web / uvicorn quiz_web.app:app --reload --port 8765
 ```
 
-## How it works
-
-| Piece | Role |
-| ----- | ---- |
-| `quiz_data` CLI | Controlled API: create topics, add facts/glossary/references, sample for a turn |
-| `topics/<slug>/` | Local fact bank (gitignored); subtopics hold `facts.txt` + `glossary.txt` |
-| `agents/` | Harness-agnostic contracts for researcher and quiz host |
-| `quiz_host` | In-process host protocol: OpenAI-compatible LLM or Cursor Agent SDK |
-| `quiz-web` | Local browse + agent-hosted play UI |
-
-Playtime stays token-cheap: each turn samples a tiny slice (target fact + glossary peers), not the whole topic.
-
-**Difficulty:** `easy` · `moderate` · `hard` (how tightly sampled peer glossary context stays in the same subtopic).  
-**Readiness:** a subtopic needs ≥8 facts to be dealt; richer buckets also aim for ≥4 glossary terms.
-
-More detail: [AGENTS.md](AGENTS.md), [docs/topic-format.md](docs/topic-format.md).
+![Pokemon topic ready to play](docs/screenshots/topic-pokemon.png)
 
 ## CLI cheatsheet
 
@@ -105,7 +107,3 @@ Point your agent at this repo (with `quiz_data` on `PATH`), then:
 **Play**
 
 > Topic: pokemon. Formats: mcq, freeform. Questions: 5. Difficulty: moderate. Host using agents/quiz-host.md and quiz_data sample-for-question.
-
-## Status
-
-Local files + CLI (any shell-capable agent) plus optional web play via `quiz_host` (LLM or Cursor SDK). Topic corpora are not committed. Vectors and persisted scores are still out of scope.
