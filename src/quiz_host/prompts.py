@@ -49,9 +49,7 @@ def sample_payload(sample: QuestionSample) -> dict:
     }
 
 
-def deal_messages(
-    sample: QuestionSample, required_format: str
-) -> list[dict[str, str]]:
+def deal_messages(sample: QuestionSample, required_format: str) -> list[dict[str, str]]:
     user = {
         "required_format": required_format,
         "sample": sample_payload(sample),

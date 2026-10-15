@@ -58,11 +58,11 @@ def test_deal_messages_require_single_format(ready_topic: str):
     assert "allowed_formats" not in user
 
 
-def test_deal_picks_format_before_model(ready_topic: str, monkeypatch: pytest.MonkeyPatch):
+def test_deal_picks_format_before_model(
+    ready_topic: str, monkeypatch: pytest.MonkeyPatch
+):
     sample = _sample(ready_topic)
-    monkeypatch.setattr(
-        "quiz_host.authoring.choose_format", lambda formats: "yes-no"
-    )
+    monkeypatch.setattr("quiz_host.authoring.choose_format", lambda formats: "yes-no")
     payload = {
         "format": "yes-no",
         "prompt": "True or false?",
